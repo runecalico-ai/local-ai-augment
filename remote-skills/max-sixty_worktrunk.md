@@ -1,0 +1,1 @@
+https://github.com/max-sixty/worktrunk/tree/main/skills/worktrunk
