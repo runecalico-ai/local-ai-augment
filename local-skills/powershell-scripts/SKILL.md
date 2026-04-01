@@ -1,58 +1,75 @@
 ---
 name: powershell-scripts
-description: Expert PowerShell scripting assistant. Use when writing, reviewing, or refactoring PowerShell scripts (.ps1) and modules (.psm1). Provides cmdlet development best practices, pipeline patterns, error handling, and proper parameter design following Microsoft guidelines.
+description: Use when writing, reviewing, or refactoring .ps1 scripts or .psm1 modules. Also triggers on ParameterBindingException errors, ShouldProcess/WhatIf questions, pipeline-processing problems, PSScriptAnalyzer violations, or converting alias-heavy scripts to approved cmdlet names.
 ---
 
 # PowerShell Scripts
 
-Expert guidance for writing idiomatic, maintainable PowerShell scripts following Microsoft cmdlet development guidelines.
+## Overview
 
-## When to Use This Skill
+Advanced PowerShell functions behave differently from simple scripts: `[CmdletBinding()]` unlocks common parameters (`-Verbose`, `-ErrorAction`, `-Debug`), and `SupportsShouldProcess` further adds `-WhatIf` and `-Confirm`. The `process {}` block runs once per pipeline object; always emit objects—not formatted text—to remain pipeline-composable.
+
+## When to Use
 
 - Writing or refactoring `.ps1` scripts or `.psm1` modules
-- Implementing PowerShell functions with proper parameter design
-- Adding pipeline support to cmdlets
-- Implementing proper error handling and ShouldProcess
-- Creating comment-based help documentation
-- Converting aliases to full cmdlet names
-- Troubleshooting PowerShell-specific issues
+- Implementing pipeline-enabled cmdlets or functions
+- Adding `SupportsShouldProcess` / `-WhatIf` confirmation to state-changing functions
+- Designing parameters with validation attributes and tab completion
+- Troubleshooting `ParameterBindingException`, pipeline breakage, or `pwsh` compatibility
+- Running PSScriptAnalyzer to enforce style and correctness rules
+- Converting aliases to full cmdlet names (`gci` → `Get-ChildItem`)
 
-## Quick Start
+### When NOT to Use
 
-### Basic Function Template
+- Quick ad-hoc one-liners where formality adds no value
+- Python, Bash, or other shell scripts (use the relevant skill)
+- Pester test authoring (use the **powershell-pesterv5** skill)
+
+## Core Pattern
+
+**Before — procedural, no pipeline support, aliases, wrong output stream:**
 
 ```powershell
-function Verb-Noun {
-    <#
-    .SYNOPSIS
-        Brief description
-    .DESCRIPTION
-        Detailed explanation
-    .PARAMETER Name
-        Parameter description
-    .EXAMPLE
-        Verb-Noun -Name "example"
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]$Name
-    )
-
-    process {
-        Write-Verbose "Processing: $Name"
-        # Logic here
+function removeItem($name) {
+    if ($name) {
+        rm $name
+        write-host "Removed $name"
     }
 }
 ```
 
-### Pipeline-Enabled Function
+**After — idiomatic advanced function with pipeline, ShouldProcess, and structured error handling:**
 
 ```powershell
-function Update-Item {
-    [CmdletBinding(SupportsShouldProcess)]
+function Remove-CacheEntry {
+    <#
+    .SYNOPSIS
+        Removes a named cache entry.
+    .DESCRIPTION
+        Removes a named entry from the local temporary cache directory.
+        Supports pipeline input and -WhatIf for safe execution.
+    .PARAMETER Name
+        The cache key to remove. Must match '^[\w\-]+$'.
+    .PARAMETER PassThru
+        Returns the removed key name on success.
+    .EXAMPLE
+        Remove-CacheEntry -Name 'session-42' -WhatIf
+        Shows what would be removed without making changes.
+    .EXAMPLE
+        'key1','key2' | Remove-CacheEntry -Verbose
+        Removes two cache entries with verbose output.
+    .OUTPUTS
+        None by default. System.String (key name) when using -PassThru.
+    .NOTES
+        Uses Remove-Item -ErrorAction Stop internally; errors are caught and re-emitted as
+        non-terminating via WriteError so remaining pipeline items continue to process.
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+    [OutputType([string])]
     param(
         [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [ValidateNotNullOrEmpty()]
+        [ValidatePattern('^[\w\-]+$')]  # restrict to safe characters for path construction
         [string]$Name,
 
         [Parameter()]
@@ -60,188 +77,64 @@ function Update-Item {
     )
 
     begin {
-        Write-Verbose "Starting update process"
+        Write-Verbose "Starting Remove-CacheEntry"
     }
 
     process {
-        if ($PSCmdlet.ShouldProcess($Name, 'Update item')) {
-            # Update logic
-            if ($PassThru) {
-                Write-Output $result
-            }
-        }
-    }
-
-    end {
-        Write-Verbose "Update process completed"
-    }
-}
-```
-
-## Core Principles
-
-### Naming Conventions
-
-- **Functions:** Use approved Verb-Noun format (check `Get-Verb`)
-- **Parameters:** PascalCase, singular form, descriptive
-- **Variables:** PascalCase for public, camelCase for private
-- **Avoid Aliases:** Use full cmdlet names in scripts
-
-### Parameter Design
-
-- Use `[CmdletBinding()]` for advanced functions
-- Add proper validation attributes (`[ValidateSet()]`, `[ValidateNotNullOrEmpty()]`)
-- Use `[switch]` for boolean flags
-- Support common parameters (`-Verbose`, `-ErrorAction`, etc.)
-- Enable pipeline input with `ValueFromPipeline` or `ValueFromPipelineByPropertyName`
-
-### Pipeline Patterns
-
-- Implement Begin/Process/End blocks for pipeline functions
-- Stream objects one at a time in `process` block
-- Use `-PassThru` pattern for action cmdlets (default to no output)
-- Return rich objects, not formatted text
-
-### Error Handling
-
-- Use `SupportsShouldProcess` for functions that modify system state
-- Set appropriate `ConfirmImpact` level (Low, Medium, High)
-- Use `Write-Verbose` for operational details
-- Use `Write-Warning` for warnings
-- Use `$PSCmdlet.WriteError()` for non-terminating errors
-- Use `$PSCmdlet.ThrowTerminatingError()` for terminating errors
-- Create proper ErrorRecord objects with category and target
-
-### Output and Messaging
-
-- `Write-Verbose`: Operational details (visible with `-Verbose`)
-- `Write-Warning`: Warning conditions
-- `Write-Error` or `$PSCmdlet.WriteError()`: Non-terminating errors
-- `throw` or `$PSCmdlet.ThrowTerminatingError()`: Terminating errors
-- `Write-Output`: Data output (avoid `Write-Host` for data)
-- `Write-Host`: User interface text only
-
-## Common Patterns
-
-### ShouldProcess with Error Handling
-
-```powershell
-function Remove-Resource {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
-    param(
-        [Parameter(Mandatory, ValueFromPipeline)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Name,
-
-        [Parameter()]
-        [switch]$Force
-    )
-
-    begin {
-        Write-Verbose "Starting removal process"
-        $ErrorActionPreference = 'Stop'
-    }
-
-    process {
+        if (-not $PSCmdlet.ShouldProcess($Name, 'Remove cache entry')) { return }
         try {
-            if ($Force -or $PSCmdlet.ShouldProcess($Name, 'Remove resource')) {
-                Write-Verbose "Removing: $Name"
-                # Removal logic
-                Write-Warning "Resource '$Name' removed"
-            }
+            Remove-Item -Path (Join-Path (Join-Path ([System.IO.Path]::GetTempPath()) 'cache') $Name) -ErrorAction Stop
+            Write-Verbose "Removed cache entry '$Name'"
+            if ($PassThru) { Write-Output $Name }
         } catch {
             $errorRecord = [System.Management.Automation.ErrorRecord]::new(
                 $_.Exception,
-                'RemovalFailed',
-                [System.Management.Automation.ErrorCategory]::NotSpecified,
+                'RemoveCacheEntryFailed',
+                # Choose the category that best describes the failure; full list in references/guidelines.md
+                [System.Management.Automation.ErrorCategory]::InvalidOperation,
                 $Name
             )
-            $PSCmdlet.ThrowTerminatingError($errorRecord)
+            $PSCmdlet.WriteError($errorRecord)
         }
     }
 
     end {
-        Write-Verbose "Removal process completed"
+        Write-Verbose "Remove-CacheEntry complete"
     }
 }
 ```
 
-### Validated Parameters with Tab Completion
+## Quick Reference
 
-```powershell
-function Set-Configuration {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [ValidateSet('Dev', 'Test', 'Prod')]
-        [string]$Environment,
+| Goal | Pattern |
+|------|---------|
+| Unlock `-Verbose`, `-ErrorAction`, `-Debug` | `[CmdletBinding()]` |
+| Pipeline input | `[Parameter(ValueFromPipeline)]` + `process {}` block |
+| `-WhatIf` / `-Confirm` support | `[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]` + `$PSCmdlet.ShouldProcess(...)` |
+| Tab-completion for values | `[ValidateSet('Dev','Test','Prod')]` |
+| Non-terminating error | `$PSCmdlet.WriteError($errorRecord)` |
+| Terminating error | `$PSCmdlet.ThrowTerminatingError($errorRecord)` |
+| Return data to pipeline | `Write-Output $obj` (never `Write-Host` for data) |
+| Declare output contract | `[OutputType([pscustomobject])]` on the function or script |
+| Split mutually exclusive inputs | `[Parameter(ParameterSetName = 'ByName')]` on each relevant parameter |
 
-        [Parameter()]
-        [ValidateRange(1, 100)]
-        [int]$Timeout = 30,
+## Implementation
 
-        [Parameter()]
-        [ValidateNotNullOrEmpty()]
-        [string[]]$Tags
-    )
+Full patterns, `OutputType` and `ParameterSetName` guidance, the complete `ErrorCategory` enum reference, comment-based help templates, and output formatting rules are documented in [references/guidelines.md](references/guidelines.md).
 
-    process {
-        Write-Verbose "Environment: $Environment, Timeout: $Timeout"
-        # Configuration logic
-    }
-}
-```
+**Tools:**
 
-## Comment-Based Help
+- **RECOMMENDED** [scripts/generate_function.ps1](scripts/generate_function.ps1) — scaffolds a new function with best-practice structure; run `Get-Help .\generate_function.ps1 -Full`
+- **RECOMMENDED** [scripts/validate_script.ps1](scripts/validate_script.ps1) — PSScriptAnalyzer analysis with actionable feedback; run `Get-Help .\validate_script.ps1 -Full`
 
-Include for all public functions:
+## Common Mistakes
 
-```powershell
-<#
-.SYNOPSIS
-    Brief one-line description
-
-.DESCRIPTION
-    Detailed explanation of what the function does
-
-.PARAMETER Name
-    Description of the Name parameter
-
-.PARAMETER Force
-    Description of the Force switch
-
-.EXAMPLE
-    Verb-Noun -Name "example"
-    Description of this example
-
-.EXAMPLE
-    Get-Item | Verb-Noun
-    Description of pipeline example
-
-.OUTPUTS
-    System.Management.Automation.PSCustomObject
-    Description of output object
-
-.NOTES
-    Additional notes, version info, or requirements
-#>
-```
-
-## Anti-Patterns to Avoid
-
-❌ Using aliases in scripts (`gci`, `?`, `%`, `where`)
-❌ Using `Write-Host` for data output
-❌ Not implementing pipeline support for collection operations
-❌ Missing `[CmdletBinding()]` for advanced functions
-❌ Using `Read-Host` in non-interactive scripts
-❌ Not including comment-based help
-❌ Using generic `throw` instead of proper ErrorRecord objects
-❌ Returning formatted text instead of objects
-
-## References
-
-For comprehensive guidelines, see [references/guidelines.md](references/guidelines.md) which contains the complete PowerShell cmdlet development best practices.
-
-### Resources
-- [generate_function.ps1](scripts/generate_function.ps1): Generates PowerShell function template with best practices. Use `Get-Help generate_function.ps1 -Full` for usage details.
-- [validate_script.ps1](scripts/validate_script.ps1): Validates PowerShell script against best practices and provides feedback. Use `Get-Help validate_script.ps1 -Full` for usage details.
+| ❌ Mistake | ✅ Fix |
+|-----------|--------|
+| `if ($Force -or $PSCmdlet.ShouldProcess(...))` — bypasses `-WhatIf` when `$Force` is set | Remove `-Force`; callers who need to skip prompts should pass `-Confirm:$false` at the call site. If `-Force` has overwrite/skip semantics, call `$PSCmdlet.ShouldProcess(...)` unconditionally first (for `-WhatIf`), then nest `if (-not ($Force -or $PSCmdlet.ShouldContinue($query, $caption))) { return }` inside that block |
+| `Write-Warning "Item removed"` as a success message | `Write-Verbose "Item removed"` — warnings are for unexpected conditions, not confirmations |
+| `process {}` block in a function that does not accept pipeline input | Omit `begin/process/end`; use a plain function body unless `ValueFromPipeline` or `ValueFromPipelineByPropertyName` is declared |
+| `[ErrorCategory]::NotSpecified` | Use a meaningful category (`InvalidOperation`, `ObjectNotFound`, `PermissionDenied`, etc.) — see guidelines.md for the full list |
+| Assuming `ConfirmImpact = 'Low'` when the attribute is omitted | Default when omitted is `'Medium'`; set explicitly when High or Low is intended |
+| Aliases in scripts (`gci`, `ls`, `dir`, `where`, `select`, `%`, `?`, and `foreach` in pipeline form) | Full cmdlet names: `Get-ChildItem`, `Where-Object`, `ForEach-Object`, `Select-Object`. The `foreach ($x in $y)` keyword form is fine; avoid only the pipeline alias form `| foreach { ... }` |
+| `Write-Host` for data output | `Write-Output` — `Write-Host` writes to the information stream, bypassing the pipeline |

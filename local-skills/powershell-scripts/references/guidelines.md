@@ -66,6 +66,36 @@ Common validation attributes:
 - `[ValidateLength(1, 50)]` - String length validation
 - `[ValidateCount(1, 10)]` - Array count validation
 
+### Parameter Sets
+
+- Use `ParameterSetName` when callers must choose between mutually exclusive input shapes
+- Put every parameter in the set on the matching `Parameter(...)` attribute
+- Use `$PSCmdlet.ParameterSetName` when execution logic depends on the chosen set
+- Document the valid combinations in comment-based help
+
+Example:
+
+```powershell
+function Get-ServerInfo {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ParameterSetName = 'ByName')]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory, ParameterSetName = 'ById')]
+        [int]$ServerId,
+
+        [Parameter()]
+        [switch]$Detailed
+    )
+
+    switch ($PSCmdlet.ParameterSetName) {
+        'ByName' { Get-ServerByName -ComputerName $ComputerName -Detailed:$Detailed }
+        'ById' { Get-ServerById -ServerId $ServerId -Detailed:$Detailed }
+    }
+}
+```
+
 ## Pipeline and Output
 
 ### Pipeline Input
@@ -96,11 +126,36 @@ Common validation attributes:
 - Return modified/created object with `-PassThru`
 - Use verbose/warning for status updates
 
+### Output Type Declaration
+
+- Use `[OutputType(...)]` to document what the command writes to the pipeline
+- Keep the declared types aligned with actual output behavior
+- Declare multiple types only when the command genuinely emits multiple object shapes
+
+Example:
+
+```powershell
+function Get-Configuration {
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    [PSCustomObject]@{
+        Path   = $Path
+        Server = 'prod-01'
+        Port   = 443
+    }
+}
+```
+
 Example:
 
 ```powershell
 function Update-ResourceStatus {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param(
         [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [string]$Name,
@@ -119,17 +174,32 @@ function Update-ResourceStatus {
     }
 
     process {
-        Write-Verbose "Processing resource: $Name"
+        if (-not $PSCmdlet.ShouldProcess($Name, "Update status to '$Status'")) { return }
 
-        $resource = [PSCustomObject]@{
-            Name        = $Name
-            Status      = $Status
-            LastUpdated = $timestamp
-            UpdatedBy   = $env:USERNAME
-        }
+        try {
+            Write-Verbose "Processing resource: $Name"
 
-        if ($PassThru.IsPresent) {
-            Write-Output $resource
+            # Actual state-changing operation — what try/catch guards:
+            Set-ResourceProperty -Name $Name -Status $Status -ErrorAction Stop
+
+            $resource = [PSCustomObject]@{
+                Name        = $Name
+                Status      = $Status
+                LastUpdated = $timestamp
+                UpdatedBy   = [System.Environment]::UserName
+            }
+
+            if ($PassThru) {
+                Write-Output $resource
+            }
+        } catch {
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                $_.Exception,
+                'UpdateResourceStatusFailed',
+                [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                $Name
+            )
+            $PSCmdlet.WriteError($errorRecord)
         }
     }
 
@@ -143,20 +213,45 @@ function Update-ResourceStatus {
 
 ### ShouldProcess Implementation
 
-- Use `[CmdletBinding(SupportsShouldProcess = $true)]`
+- Use `[CmdletBinding(SupportsShouldProcess)]`
 - Set appropriate `ConfirmImpact` level:
-  - `Low`: Minimal risk (default)
-  - `Medium`: Moderate risk (typical for modifications)
-  - `High`: Significant risk (deletions, critical changes)
+  - `Low`: Minimal risk (set explicitly for reversible, low-consequence operations)
+  - `Medium`: Moderate risk (**default when omitted**)
+  - `High`: Significant risk (deletions, critical or irreversible changes)
 - Call `$PSCmdlet.ShouldProcess()` for system changes
-- Use `ShouldContinue()` for additional confirmations
+- Use `ShouldContinue()` **inside** a `ShouldProcess` block for a second-level confirmation; `ShouldContinue` does not check `-WhatIf`, so it must be nested within the `ShouldProcess` guard to remain WhatIf-safe
+
+Example with nested `ShouldContinue()`:
+
+```powershell
+function Remove-CriticalResource {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$Name
+    )
+
+    process {
+        if (-not $PSCmdlet.ShouldProcess($Name, 'Remove resource')) { return }
+
+        $proceed = $PSCmdlet.ShouldContinue(
+            'This operation cannot be undone. Do you want to continue?',
+            'Confirm permanent deletion'
+        )
+        if (-not $proceed) { return }
+
+        Write-Verbose "Removing resource: $Name"
+        Remove-Item -Path $Name -Force
+    }
+}
+```
 
 ### Message Streams
 
 - `Write-Verbose`: Operational details (visible with `-Verbose`)
 - `Write-Warning`: Warning conditions
-- `Write-Error`: Non-terminating errors
-- `throw`: Terminating errors
+- `$PSCmdlet.WriteError($errorRecord)`: Non-terminating errors (prefer over `Write-Error` in advanced functions)
+- `$PSCmdlet.ThrowTerminatingError($errorRecord)`: Terminating errors (prefer over `throw` in advanced functions)
 - Avoid `Write-Host` except for user interface text
 
 ### Error Handling Pattern
@@ -170,25 +265,24 @@ Example:
 
 ```powershell
 function Remove-UserAccount {
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     param(
         [Parameter(Mandatory, ValueFromPipeline)]
         [ValidateNotNullOrEmpty()]
-        [string]$Username,
-
-        [Parameter()]
-        [switch]$Force
+        [ValidatePattern('^[\w\.\-]+$')]  # restrict to safe characters for -Identity resolution and direct use in string-form AD filters
+        [string]$Username
     )
 
     begin {
         Write-Verbose 'Starting user account removal process'
-        $ErrorActionPreference = 'Stop'
+        # Use -ErrorAction Stop on individual cmdlets rather than setting the preference globally
     }
 
     process {
         try {
             # Validation
-            if (-not (Test-UserExists -Username $Username)) {
+            $adUser = Get-ADUser -Filter { SamAccountName -eq $Username } -ErrorAction SilentlyContinue
+            if (-not $adUser) {
                 $errorRecord = [System.Management.Automation.ErrorRecord]::new(
                     [System.Exception]::new("User account '$Username' not found"),
                     'UserNotFound',
@@ -201,27 +295,29 @@ function Remove-UserAccount {
 
             # Confirmation
             $shouldProcessMessage = "Remove user account '$Username'"
-            if ($Force -or $PSCmdlet.ShouldProcess($Username, $shouldProcessMessage)) {
-                Write-Verbose "Removing user account: $Username"
+            if (-not $PSCmdlet.ShouldProcess($Username, $shouldProcessMessage)) { return }
 
-                Remove-ADUser -Identity $Username -ErrorAction Stop
-                Write-Warning "User account '$Username' has been removed"
-            }
+            Write-Verbose "Removing user account: $Username"
+            Remove-ADUser -Identity $Username -ErrorAction Stop
+            Write-Verbose "User account '$Username' has been removed"
         } catch [Microsoft.ActiveDirectory.Management.ADException] {
             $errorRecord = [System.Management.Automation.ErrorRecord]::new(
                 $_.Exception,
                 'ActiveDirectoryError',
-                [System.Management.Automation.ErrorCategory]::NotSpecified,
+                [System.Management.Automation.ErrorCategory]::PermissionDenied,
                 $Username
             )
+            # ThrowTerminatingError: AD/system errors are not per-item failures; abort the pipeline.
+            # For per-item failures, use $PSCmdlet.WriteError($errorRecord) instead.
             $PSCmdlet.ThrowTerminatingError($errorRecord)
         } catch {
             $errorRecord = [System.Management.Automation.ErrorRecord]::new(
                 $_.Exception,
                 'UnexpectedError',
-                [System.Management.Automation.ErrorCategory]::NotSpecified,
+                [System.Management.Automation.ErrorCategory]::InvalidOperation,
                 $Username
             )
+            # ThrowTerminatingError: unexpected failures are systemic; abort the pipeline.
             $PSCmdlet.ThrowTerminatingError($errorRecord)
         }
     }
@@ -315,7 +411,7 @@ function Get-UserProfile {
 
 Use full cmdlet names and parameters:
 - Use `Where-Object` instead of `?` or `where`
-- Use `ForEach-Object` instead of `%` or `foreach`
+- Use `ForEach-Object` instead of the `foreach` alias (i.e., `| foreach { }` in pipeline context); the `foreach ($x in $y) { }` keyword form is not an alias and is acceptable in scripts
 - Use `Get-ChildItem` instead of `ls`, `dir`, or `gci`
 - Use `Select-Object` instead of `select`
 - Use full parameter names instead of abbreviations
@@ -358,11 +454,11 @@ function New-Resource {
     .NOTES
         Requires appropriate permissions to create resources
     #>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param(
-        [Parameter(Mandatory = $true,
-            ValueFromPipeline = $true,
-            ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory,
+            ValueFromPipeline,
+            ValueFromPipelineByPropertyName)]
         [ValidateNotNullOrEmpty()]
         [string]$Name,
 
@@ -380,30 +476,25 @@ function New-Resource {
     }
 
     process {
+        if (-not $PSCmdlet.ShouldProcess($Name, "Create new resource in $Environment environment")) { return }
         try {
-            if ($PSCmdlet.ShouldProcess($Name, "Create new resource in $Environment environment")) {
-                Write-Verbose "Creating resource: $Name"
+            Write-Verbose "Creating resource: $Name"
 
-                # Resource creation logic here
-                $resource = [PSCustomObject]@{
-                    PSTypeName  = 'Custom.Resource'
-                    Name        = $Name
-                    Environment = $Environment
-                    Created     = Get-Date
-                    CreatedBy   = $env:USERNAME
-                }
-
-                $created++
-
-                if ($PassThru.IsPresent) {
-                    Write-Output $resource
-                }
+            # Resource creation logic here
+            $resource = [PSCustomObject]@{
+                PSTypeName  = 'Custom.Resource'
+                Name        = $Name
+                Environment = $Environment
+                Created     = Get-Date
+                CreatedBy   = [System.Environment]::UserName
             }
+            $created++
+            if ($PassThru) { Write-Output $resource }
         } catch {
             $errorRecord = [System.Management.Automation.ErrorRecord]::new(
                 $_.Exception,
                 'ResourceCreationFailed',
-                [System.Management.Automation.ErrorCategory]::NotSpecified,
+                [System.Management.Automation.ErrorCategory]::InvalidOperation,
                 $Name
             )
             $PSCmdlet.WriteError($errorRecord)
@@ -418,9 +509,9 @@ function New-Resource {
 
 ## ErrorRecord Categories
 
-Common error categories to use:
+Reference for `[System.Management.Automation.ErrorCategory]` values:
 
-- `NotSpecified`: General error
+- `NotSpecified`: Last resort only - avoid in practice. Use the most specific applicable category above.
 - `OpenError`: Error opening file/resource
 - `CloseError`: Error closing file/resource
 - `DeviceError`: Device error
@@ -446,6 +537,12 @@ Common error categories to use:
 - `WriteError`: Write error
 - `FromStdErr`: From standard error
 - `SecurityError`: Security error
+- `ProtocolError`: Protocol error
+- `ConnectionError`: Connection error
+- `AuthenticationError`: Authentication failure
+- `LimitsExceeded`: Limits exceeded
+- `QuotaExceeded`: Quota exceeded
+- `NotEnabled`: Functionality not enabled
 
 ## Best Practices Summary
 
