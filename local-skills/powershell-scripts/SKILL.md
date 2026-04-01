@@ -241,3 +241,7 @@ Include for all public functions:
 ## References
 
 For comprehensive guidelines, see [references/guidelines.md](references/guidelines.md) which contains the complete PowerShell cmdlet development best practices.
+
+### Resources
+- [generate_function.ps1](scripts/generate_function.ps1): Generates PowerShell function template with best practices. Use `Get-Help generate_function.ps1 -Full` for usage details.
+- [validate_script.ps1](scripts/validate_script.ps1): Validates PowerShell script against best practices and provides feedback. Use `Get-Help validate_script.ps1 -Full` for usage details.
