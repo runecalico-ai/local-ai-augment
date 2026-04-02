@@ -673,39 +673,36 @@ stage('Process') {
 
 ### Parallel Execution and Serialization
 
+A shared `Map` is not the problem by itself. The failure mode here is concurrent mutation across `parallel` branches, which is brittle even when the values are serializable.
+
 ```groovy
-// ❌ PROBLEM: Shared mutable state
+// ❌ PROBLEM: parallel branches mutate the same shared map
 def results = [:]
 parallel(
     'task1': {
-        def conn = getDbConnection()
-        results.task1 = conn.query("SELECT 1")  // Race condition + serialization
-        conn.close()
+        results.task1 = sh(script: 'echo task1', returnStdout: true).trim()
     },
     'task2': {
-        def conn = getDbConnection()
-        results.task2 = conn.query("SELECT 2")
-        conn.close()
+        results.task2 = sh(script: 'echo task2', returnStdout: true).trim()
     }
 )
 
-// ✅ SOLUTION: Immutable updates or synchronized access
-def results = [:]
+// ✅ SOLUTION: keep branch output local, then merge after parallel
 parallel(
     'task1': {
-        def data = queryInNonCPS("SELECT 1")
-        // Atomic update
-        synchronized(results) {
-            results.task1 = data
-        }
+        def output = sh(script: 'echo task1', returnStdout: true).trim()
+        writeFile file: 'task1.result', text: output
     },
     'task2': {
-        def data = queryInNonCPS("SELECT 2")
-        synchronized(results) {
-            results.task2 = data
-        }
+        def output = sh(script: 'echo task2', returnStdout: true).trim()
+        writeFile file: 'task2.result', text: output
     }
 )
+
+def results = [
+    task1: readFile('task1.result').trim(),
+    task2: readFile('task2.result').trim()
+]
 
 @NonCPS
 def queryInNonCPS(String sql) {

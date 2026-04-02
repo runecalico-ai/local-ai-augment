@@ -1,7 +1,6 @@
 ---
 name: jenkins-groovy-dsl
-description: Expert guidance for Jenkins Groovy DSL programming in Jenkinsfiles and shared libraries. Use when writing or reviewing Groovy code in Jenkins pipelines, troubleshooting CPS (Continuation Passing Style) serialization issues, understanding Jenkins-specific Groovy limitations, or implementing shared library code. Covers design patterns, anti-patterns, workarounds for DSL constraints, safe coding practices, and advanced Groovy techniques specific to Jenkins automation.
-license: Complete terms in LICENSE.txt
+description: Use when writing or reviewing a Jenkinsfile or Jenkins shared library, or when troubleshooting Jenkins CPS, sandbox, NotSerializableException, CpsCallableInvocation, or other pipeline Groovy DSL errors.
 ---
 
 # Jenkins Groovy DSL Best Practices
@@ -39,17 +38,16 @@ CPS allows Jenkins to pause pipeline execution and resume it later (e.g., after 
 2. **Avoid non-serializable objects** - No File, Stream, Database connections as variables
 3. **Prefer simple types** - String, Integer, Boolean, List, Map are safe
 4. **Iterators are dangerous** - Use `.each{}` or list comprehensions carefully
-5. **Script blocks isolate CPS** - `script {}` in Declarative or `@NonCPS` in functions
+5. **`script {}` does not bypass CPS** - It lets Declarative Pipeline run scripted Groovy, but serialization and suspension rules still apply inside the block
 
 ## Quick Security & Safety Checklist
 
-- [ ] No untrusted input in string interpolation (use `sh` with single quotes)
 - [ ] All complex objects disposed or set to null before stage ends
 - [ ] No iterators or streams stored in variables
 - [ ] Closures don't capture non-serializable objects
 - [ ] `@NonCPS` methods marked correctly (pure functions only)
 - [ ] Try-catch blocks properly handle serialization
-- [ ] No shared mutable state between stages
+- [ ] Cross-stage state is explicit and serializable; `parallel` branches do not mutate shared objects
 
 ## Core Groovy DSL Patterns
 
@@ -74,14 +72,17 @@ Version: ${version}
 """
 
 // ⚠️ Security: Never interpolate untrusted input
-def userInput = params.BRANCH_NAME
-sh "git checkout ${userInput}"  // ❌ INJECTION RISK
+def userInput = params.BRANCH_NAME?.trim()
+sh "git checkout ${userInput}"    // ❌ INJECTION RISK
+sh "git checkout '${userInput}'"  // ❌ Still unsafe: Groovy already interpolated the value
 
-// ✅ CORRECT - use single quotes and shell escaping
-sh "git checkout '${userInput}'"  // Still risky
-// Better: validate first
-if (userInput ==~ /^[a-zA-Z0-9_\-\/]+$/) {
-    sh "git checkout '${userInput}'"
+// ✅ Safer pattern: validate first, then let the shell expand a quoted env var
+if (!userInput || !(userInput ==~ /^[a-zA-Z0-9._\/-]+$/)) {
+    error 'Invalid BRANCH_NAME parameter'
+}
+
+withEnv(["BRANCH_NAME=${userInput}"]) {
+    sh 'git checkout -- "$BRANCH_NAME"'
 }
 ```
 
@@ -202,7 +203,8 @@ try {
 } catch (Exception e) {
     // Handle
 }
-// ✅ Solution: Use @NonCPS or script blocks
+// ✅ Solution: keep non-serializable objects out of resumable pipeline state;
+// use a small @NonCPS helper only for pure Groovy work
 ```
 
 ## Design Limitations and Workarounds
@@ -378,7 +380,8 @@ stage('Query') {
 }
 // Pipeline suspension here will FAIL - connection not serializable
 
-// ✅ CORRECT - create and dispose in same @NonCPS or script block
+// ✅ CORRECT - create and dispose in one pure Groovy helper so the
+// connection never crosses a suspension point
 @NonCPS
 def queryDatabase(String query) {
     def connection = null
@@ -439,27 +442,31 @@ def buildAndDeploy() {
 
 ### 4. Shared Mutable State
 
+A plain serializable `Map` is fine when one sequential stage hands it to the next. The real hazards are hiding non-serializable objects in pipeline state and mutating the same object from `parallel` branches.
+
 ```groovy
-// ❌ WRONG - shared mutable map between stages
+// ❌ WRONG - parallel branches mutate the same shared map
+def results = [:]
+
+parallel(
+    'Test A': {
+        results.testA = sh(script: 'run-test-a', returnStdout: true).trim()
+    },
+    'Test B': {
+        results.testB = sh(script: 'run-test-b', returnStdout: true).trim()
+    }
+)
+
+// ✅ CORRECT - explicit serializable handoff between sequential stages
 def results = [:]
 
 stage('Test A') {
-    results.testA = 'passed'  // CPS serialization issues
+    results.testA = sh(script: 'run-test-a', returnStdout: true).trim()
 }
 
 stage('Test B') {
-    results.testB = 'passed'
-}
-
-// ✅ CORRECT - use immutable or rebuild each time
-def testResults = []
-
-stage('Test A') {
-    testResults = testResults + ['testA': 'passed']
-}
-
-stage('Test B') {
-    testResults = testResults + ['testB': 'passed']
+    results.testB = sh(script: 'run-test-b', returnStdout: true).trim()
+    echo "A=${results.testA}, B=${results.testB}"
 }
 ```
 
@@ -473,33 +480,33 @@ stage('Test B') {
 
 ## Debugging Tips
 
-### Enable CPS Debugging
+### Reduce to a Small Reproduction
 
-```groovy
-// Show CPS transformation details
-@groovy.transform.CompileStatic  // Can help identify issues
-def myMethod() {
-    // code
-}
-```
+- Strip the failure down to one suspect value and one later Pipeline step that may suspend or resume.
+- Log that value's type and serializability immediately before the step.
+- Move only pure data transformation into a small `@NonCPS` helper; never call Pipeline steps from it.
 
 ### Print Variable Types
 
 ```groovy
-def debugVar(var) {
-    echo "Type: ${var.getClass().name}"
-    echo "Value: ${var}"
-    echo "Serializable: ${var instanceof Serializable}"
+def debugVar(String name, def value) {
+    def typeName = value == null ? 'null' : value.getClass().name
+    echo "${name} type: ${typeName}"
+    echo "${name} serializable: ${value instanceof Serializable}"
+    echo "${name} value: ${value}"
 }
+
+// Call this before the next step that may suspend or resume
+debugVar('payload', payload)
 ```
 
 ### Stack Trace Analysis
 
 When you see `NotSerializableException`:
 1. Look for the class name (e.g., `java.io.File`)
-2. Find where that object is created
-3. Ensure it's disposed before pipeline suspension points
-4. Consider moving to `@NonCPS` method
+2. Find where that object is created or captured
+3. Log its type/serializability before the next suspension point
+4. Move only pure transformation code into a small `@NonCPS` helper if no Pipeline steps are involved
 
 ## Quick Reference
 
@@ -585,7 +592,7 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    // Safe string interpolation
+                    // Trusted internal version string
                     def version = "${env.MAJOR}.${env.MINOR}.${env.PATCH}"
                     sh "make build VERSION=${version}"
 

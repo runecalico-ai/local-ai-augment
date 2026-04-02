@@ -43,20 +43,24 @@ def content = readFile('/tmp/data.txt')
 import jenkins.model.Jenkins
 def instance = Jenkins.getInstance()  // ERROR: Not allowed in sandbox
 
-// ✅ WORKAROUND: Use approved plugin APIs or disable sandbox
+// ✅ WORKAROUND: Use approved plugin APIs, a trusted shared library, or script approval
 @Library('my-lib@master') _
-// Code in shared library 'src/' runs outside sandbox
+// Untrusted shared-library code still runs in the sandbox
 ```
 
 ### Bypassing Sandbox (When Appropriate)
 
-**Option 1: Shared Library `src/` code**
+**Option 1: Trusted Shared Library `src/` code**
+
+Shared-library `src/` code still gets CPS transformation. Jenkins internal API access here requires a trusted library or equivalent approval.
+
 ```groovy
-// In shared library: src/org/company/Helper.groovy
+// In trusted shared library: src/org/company/Helper.groovy
 package org.company
 
 class Helper {
     static def getJenkinsVersion() {
+        // Requires a trusted library because this uses Jenkins internal APIs
         return jenkins.model.Jenkins.instance.version
     }
 }
@@ -131,7 +135,7 @@ class DeploymentConfig implements Serializable {
 
     def validate() {
         if (!environment || !version) {
-            error "Invalid configuration"
+            throw new IllegalStateException('Invalid configuration')
         }
     }
 }
@@ -141,7 +145,7 @@ class DeploymentConfig implements Serializable {
 import org.company.DeploymentConfig
 
 def config = new DeploymentConfig('production', '1.2.3')
-config.validate()
+config.validate()  // Uncaught exceptions from library classes still fail the build
 ```
 
 ### Workaround 3: Closure-Based "Classes"
@@ -280,7 +284,7 @@ def date = sh(script: 'date +%Y-%m-%d', returnStdout: true).trim()
 
 **Strategy 3: Move to Shared Library**
 
-Code in `src/` directory of shared libraries runs outside sandbox.
+Code in `src/` is still CPS-transformed. Untrusted libraries remain sandboxed; trusted libraries can encapsulate restricted operations.
 
 ```groovy
 // In shared library: src/org/company/Util.groovy
@@ -298,6 +302,8 @@ import org.company.Util
 
 echo Util.getCurrentDate()
 ```
+
+If this still hits a sandbox restriction, use script approval or move the helper into a trusted library.
 
 ### Pre-Approving Methods
 
@@ -526,6 +532,7 @@ if (hasDockerPlugin()) {
  */
 
 // Or check programmatically (in shared library)
+// Trusted library or approved signatures required: uses Jenkins internal APIs
 @NonCPS
 def checkPlugins(List required) {
     def pm = jenkins.model.Jenkins.instance.pluginManager
@@ -563,29 +570,34 @@ if (canUseKubernetes) {
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Global Variables with Side Effects
+### Anti-Pattern 1: Implicit Global State with Side Effects
+
+Sequential stages can pass serializable values safely, but hidden side effects make pipelines harder to reason about and become especially risky when reused in `parallel`.
 
 ```groovy
-// ❌ BAD: Shared mutable state
-def globalCounter = 0
-
-stage('Stage 1') {
-    globalCounter++  // Serialization issues, race conditions
+// ❌ BAD: helper mutates outer pipeline state as a side effect
+def buildState = [:]
+def remember = { key, value ->
+    buildState[key] = value
 }
 
-stage('Stage 2') {
-    echo "Counter: ${globalCounter}"  // May not be what you expect
+stage('Build') {
+    remember('image', "app:${env.BUILD_NUMBER}")
 }
 
-// ✅ GOOD: Immutable or locally scoped
-def counters = [:]
-
-stage('Stage 1') {
-    counters.stage1 = 1
+stage('Deploy') {
+    sh "deploy --image ${buildState.image}"
 }
 
-stage('Stage 2') {
-    echo "Stage 1 count: ${counters.stage1}"
+// ✅ GOOD: make the handoff explicit with serializable state
+def buildState = [:]
+
+stage('Build') {
+    buildState = [image: "app:${env.BUILD_NUMBER}"]
+}
+
+stage('Deploy') {
+    sh "deploy --image ${buildState.image}"
 }
 ```
 
@@ -649,7 +661,20 @@ pipeline {
     stages {
         stage('Deploy') {
             steps {
-                sh "deploy.sh ${params.ENVIRONMENT} ${params.REGION} my-app-v${params.VERSION}"
+                script {
+                    def version = params.VERSION?.trim()
+                    if (!version || !(version ==~ /^[0-9A-Za-z._-]+$/)) {
+                        error 'Invalid VERSION parameter'
+                    }
+
+                    withEnv([
+                        "DEPLOY_ENV=${params.ENVIRONMENT}",
+                        "DEPLOY_REGION=${params.REGION}",
+                        "DEPLOY_VERSION=my-app-v${version}"
+                    ]) {
+                        sh 'deploy.sh "$DEPLOY_ENV" "$DEPLOY_REGION" "$DEPLOY_VERSION"'
+                    }
+                }
             }
         }
     }
@@ -793,7 +818,7 @@ buildAndDeploy(
 ### When You Hit a Limitation
 
 1. **Check documentation** - Plugin or Jenkins docs may have solutions
-2. **Use shared libraries** - Most limitations don't apply in `src/`
+2. **Use shared libraries** - `src/` helps structure reusable code, but restricted APIs still depend on trusted vs untrusted library settings
 3. **Script approval** - Admin can whitelist methods
 4. **Fallback to shell** - `sh` step is very flexible
 5. **Ask for help** - Jenkins community is active

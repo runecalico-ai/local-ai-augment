@@ -41,7 +41,7 @@ my-shared-library/
 ### Three Key Directories
 
 1. **`vars/`** - Global pipeline variables (DSL-style methods available in pipelines)
-2. **`src/`** - Regular Groovy classes (runs outside sandbox, full Groovy features)
+2. **`src/`** - Regular Groovy classes (added to the Pipeline classpath; CPS and trust rules still apply)
 3. **`resources/`** - Static files (templates, scripts, configs)
 
 ## Global Variables (vars/)
@@ -261,7 +261,7 @@ retry.withBackoff(4) {
 
 ### Standard Groovy Classes
 
-Code in `src/` runs **outside the sandbox** with full Groovy and Jenkins API access.
+Code in `src/` is added to the Pipeline classpath and gets the same CPS transformation as Scripted Pipeline. Trusted libraries can use broader Groovy and Jenkins APIs; untrusted libraries still run in the sandbox and may need script approval.
 
 **File: `src/org/company/BuildConfig.groovy`**
 ```groovy
@@ -956,7 +956,7 @@ class DeployTest extends BasePipelineTest {
 ### Key Takeaways
 
 1. **vars/** for DSL-style methods accessible in all pipelines
-2. **src/** for full Groovy classes with unrestricted access
+2. **src/** for reusable Groovy classes; CPS still applies, and restricted API access depends on whether the library is trusted or untrusted
 3. **resources/** for templates and static files
 4. Always implement `Serializable` in classes
 5. Pass pipeline context (`this`) to classes that need it
@@ -977,7 +977,7 @@ class DeployTest extends BasePipelineTest {
 **Use src/ when:**
 - Creating reusable classes
 - Complex business logic
-- Need full Groovy/Java features
+- Need reusable Groovy/Java logic with CPS-aware classes
 - Utility functions and services
 
 **Use resources/ when:**
