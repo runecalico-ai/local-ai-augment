@@ -1,6 +1,6 @@
 ---
 name: shellcheck-configuration
-description: Master ShellCheck static analysis configuration and usage for shell script quality. Use when setting up linting infrastructure, fixing code issues, or ensuring script portability.
+description: Use when configuring ShellCheck, addressing linux shell portability issues, and analyzing shell scripts for common pitfalls and best practices.
 ---
 
 # ShellCheck Configuration and Static Analysis
@@ -103,7 +103,7 @@ shellcheck \
 
 shellcheck \
   --shell=bash \
-  --exclude=SC1091,SC2119 \
+  --exclude=SC1091,SC2034 \
   --enable=all \
   script.sh
 ```
@@ -138,8 +138,8 @@ enable=avoid-nullary-conditions,require-variable-braces,check-unassigned-upperca
 # SC1091: Not following sourced files (many false positives)
 disable=SC1091
 
-# SC2119: Use function_name instead of function_name -- (arguments)
-disable=SC2119
+# SC2034: Variable appears unused in sourced env files
+disable=SC2034
 
 # External files to source for context
 external-sources=true
@@ -212,7 +212,7 @@ for file in $(ls -la); do
 done
 
 # Disable for entire script
-# shellcheck disable=SC1091,SC2119
+# shellcheck disable=SC1091,SC2034
 
 # Disable multiple warnings (format varies)
 command_that_fails() {
@@ -282,7 +282,7 @@ done
 shellcheck script.sh
 
 # Output:
-# script.sh:1:3: warning: foo is referenced but not assigned. [SC2154]
+# script.sh:1:1: warning: foo appears unused. Verify use (or export if used externally). [SC2034]
 ```
 
 ### GCC Format (for CI/CD)
@@ -291,7 +291,7 @@ shellcheck script.sh
 shellcheck --format=gcc script.sh
 
 # Output:
-# script.sh:1:3: warning: foo is referenced but not assigned.
+# script.sh:1:1: warning: foo appears unused. Verify use (or export if used externally).
 ```
 
 ### JSON Format (for parsing)
@@ -300,7 +300,7 @@ shellcheck --format=gcc script.sh
 shellcheck --format=json script.sh
 
 # Output:
-# [{"file": "script.sh", "line": 1, "column": 3, "level": "warning", "code": 2154, "message": "..."}]
+# [{"file": "script.sh", "line": 1, "column": 1, "level": "warning", "code": 2034, "message": "..."}]
 ```
 
 ### Quiet Format
@@ -324,7 +324,7 @@ shellcheck --format=quiet script.sh
 
 ## Error Code References
 
-ShellCheck has detailed documentation for every error code. For detailed examples with problematic code, correct solutions, and rationale, see the **[references](references/)** directory. This skill includes comprehensive reference guides organized by category:
+ShellCheck's official wiki has documentation for every error code. This skill's **[references](references/)** directory provides curated detailed coverage for common issues, parser errors, quoting and array pitfalls, and selected POSIX portability codes, with [references/README.md](references/README.md) serving as the broader lookup index:
 
 ### Quick Reference: Common Error Codes
 
@@ -386,13 +386,12 @@ Each reference file includes:
 When ShellCheck reports an error:
 
 1. Note the error code (e.g., SC2086)
-2. Check the relevant reference file based on code range:
-   - SC1000-1999 → [parser-errors.md](references/parser-errors.md)
-   - SC2000-2999 → [common-errors.md](references/common-errors.md) or [quoting-arrays.md](references/quoting-arrays.md)
-   - SC3000-3999 → [posix-compliance.md](references/posix-compliance.md)
-   - Check the [references directory](references/README.md) for detailed documentation
-     Each reference includes problematic/correct code examples and rationale
-     Or visit https://www.shellcheck.net/wiki/SC2086 for online docs
+2. Check the most relevant reference file or index:
+  - SC1000-1999 parser issues → [parser-errors.md](references/parser-errors.md)
+  - Common SC2000-2999 scripting, quoting, and array issues → [common-errors.md](references/common-errors.md) or [quoting-arrays.md](references/quoting-arrays.md)
+  - Selected SC3000-3999 POSIX portability issues → [posix-compliance.md](references/posix-compliance.md)
+  - Broader lookup across the codes covered here → [references/README.md](references/README.md)
+  - For any code not documented in this skill, use https://www.shellcheck.net/wiki/SC2086
 3. Read the problematic and correct code examples
 4. Apply the fix to your script
 5. Run ShellCheck again to verify

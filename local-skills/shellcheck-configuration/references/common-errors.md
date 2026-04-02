@@ -13,6 +13,12 @@ This reference provides detailed information about the most frequently encounter
 - [SC2115: Dangerous wildcard expansion](#sc2115)
 - [SC2164: cd may fail](#sc2164)
 - [SC2155: Masked return values](#sc2155)
+- [SC2009: Use pgrep instead of ps | grep](#sc2009)
+- [SC2012: Use find instead of ls](#sc2012)
+- [SC2116: Remove useless echo](#sc2116)
+- [SC2162: Use read -r](#sc2162)
+- [SC2230: Use command -v instead of which](#sc2230)
+- [SC2236: Use -n instead of ! -z](#sc2236)
 
 ---
 

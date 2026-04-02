@@ -10,6 +10,14 @@ This reference documents common POSIX compatibility issues (SC3000-3999 range) f
 - [SC3003: $'...' syntax](#sc3003)
 - [SC3020: &> redirection](#sc3020)
 - [SC3030: Arrays](#sc3030)
+- [SC3011: Here-strings](#sc3011)
+- [SC3014: == in test expressions](#sc3014)
+- [SC3037: echo flags](#sc3037)
+- [SC3044: declare / typeset / let](#sc3044)
+- [SC3045: Built-in command flags](#sc3045)
+- [SC3046: source vs .](#sc3046)
+- [SC3054: Array references](#sc3054)
+- [SC3060: String replacement](#sc3060)
 
 ---
 
@@ -1146,7 +1154,7 @@ In `[[` `]]` (Bash), both `=` and `==` work, but `[[` `]]` itself isn't POSIX. F
 ### Related Codes
 
 - [SC3010](#sc3010) - `[[ ]]` not in POSIX
-- [SC2007](common-errors.md) - Use `$((..))` for arithmetic
+- [SC2007 quick reference](common-errors.md#quick-reference-additional-common-errors) - Use `$((..))` for arithmetic
 
 ---
 
@@ -1200,7 +1208,7 @@ Plain `echo` without flags is generally portable (though backslash handling vari
 
 ### Related Codes
 
-- [SC2028](common-errors.md) - echo doesn't interpret escapes, use printf
+- [SC2028 quick reference](common-errors.md#quick-reference-additional-common-errors) - echo doesn't interpret escapes, use printf
 - [SC3143] - echo with command substitution
 
 ---
@@ -1516,80 +1524,26 @@ Basic expansion `${var}`, `${var:-default}`, `${var:=default}` are POSIX-complia
 
 ---
 
-## Quick Reference: All POSIX Compliance Error Codes
+## Quick Reference: Codes Covered in This Document
 
-### Syntax and Operators (SC3000-3019)
+This quick reference is intentionally limited to the ShellCheck POSIX compatibility codes documented in detail above. For the full SC3000-SC3999 catalog, use the official ShellCheck wiki instead of a hand-maintained summary table here.
 
-| Code | Message | Severity |
-|------|---------|----------|
-| SC3001 | In POSIX sh, `&>` redirection is undefined | Warning |
-| SC3002 | In POSIX sh, `\o` in `$".."` is not special | Warning |
-| SC3003 | In POSIX sh, `${var/pattern/string}` is undefined | Warning |
-| SC3004 | In POSIX sh, `${#var[@]}` is undefined | Warning |
-| SC3005 | In POSIX sh, `${!var[@]}` is undefined | Warning |
-| SC3006 | In POSIX sh, `[[ ]]` is undefined | Warning |
-| SC3007 | In POSIX sh, `<&` redirection is undefined | Warning |
-| SC3008 | In POSIX sh, `|&` is undefined | Warning |
-| SC3009 | In POSIX sh, `;&` in case is undefined | Warning |
-| SC3010 | In POSIX sh, `[[ ]]` is undefined | Warning |
-| SC3011 | In POSIX sh, here-strings (`<<<`) are undefined | Warning |
-| SC3012 | In POSIX sh, `\x` in `$".."` is not special | Warning |
-| SC3013 | In POSIX sh, `$".."` is undefined | Warning |
-| SC3014 | In POSIX sh, `==` in place of `=` is undefined | Warning |
-| SC3015 | In POSIX sh, `=~` is undefined | Warning |
-| SC3016 | In POSIX sh, process substitution (`<()`) is undefined | Warning |
-| SC3017 | In POSIX sh, `${array[x]:y:z}` is undefined | Warning |
-| SC3018 | In POSIX sh, arithmetic `for` loops are undefined | Warning |
-| SC3019 | In POSIX sh, `${array:offset:len}` is undefined | Warning |
-
-### Commands and Built-ins (SC3020-3049)
-
-| Code | Message | Severity |
-|------|---------|----------|
-| SC3020 | In POSIX sh, `local` is undefined | Warning |
-| SC3021 | In POSIX sh, `+=` is undefined | Warning |
-| SC3022 | In POSIX sh, `[[ -v ]]` is undefined | Warning |
-| SC3023 | In POSIX sh, `[[ -z ]]` (regex) is undefined | Warning |
-| SC3024 | In POSIX sh, `-o pipefail` is undefined | Warning |
-| SC3025 | In POSIX sh, `set -o` long options are undefined | Warning |
-| SC3026 | In POSIX sh, `-ot` is undefined | Warning |
-| SC3027 | In POSIX sh, `\$'"..."'` is undefined | Warning |
-| SC3028 | In POSIX sh, `BASH_*` variables are undefined | Warning |
-| SC3029 | In POSIX sh, `!` negation outside `[[` is undefined | Warning |
-| SC3030 | In POSIX sh, `function` keyword is undefined | Warning |
-| SC3031 | In POSIX sh, `>&2` with command is undefined | Warning |
-| SC3032 | In POSIX sh, `{1..10}` brace expansion is undefined | Warning |
-| SC3033 | In POSIX sh, `{a,b}` brace expansion is undefined | Warning |
-| SC3034 | In POSIX sh, non-decimal integer literals are undefined | Warning |
-| SC3035 | In POSIX sh, `$RANDOM` is undefined | Warning |
-| SC3036 | In POSIX sh, nameref / `declare -n` is undefined | Warning |
-| SC3037 | In POSIX sh, echo flags (`-n`, `-e`) are undefined | Warning |
-| SC3038 | In POSIX sh, `printf -v` is undefined | Warning |
-| SC3039 | In POSIX sh, `(( ))` is undefined | Warning |
-| SC3040 | In POSIX sh, `$((x++))` is undefined | Warning |
-| SC3041 | In POSIX sh, `${!var}` is undefined | Warning |
-| SC3042 | In POSIX sh, `echo "$((x))"` may differ | Warning |
-| SC3043 | In POSIX sh, `local` is undefined | Warning |
-| SC3044 | In POSIX sh, `declare/typeset/let` are undefined | Warning |
-| SC3045 | In POSIX sh, built-in command flags may differ | Warning |
-| SC3046 | In POSIX sh, `source` in place of `.` is undefined | Warning |
-
-### Arrays and Advanced Features (SC3050-3099)
-
-| Code | Message | Severity |
-|------|---------|----------|
-| SC3050 | In POSIX sh, `${var:+x}` is undefined | Info |
-| SC3051 | In POSIX sh, `${!prefix@}` is undefined | Warning |
-| SC3052 | In POSIX sh, `((..))` is undefined | Warning |
-| SC3053 | In POSIX sh, `[[ .. ]]` is undefined | Warning |
-| SC3054 | In POSIX sh, array references are undefined | Warning |
-| SC3055 | In POSIX sh, indirect expansion (`${!var}`) is undefined | Warning |
-| SC3056 | In POSIX sh, `nameref` is undefined | Warning |
-| SC3057 | In POSIX sh, `!` in parameter expansion is undefined | Warning |
-| SC3058 | In POSIX sh, `^` in parameter expansion is undefined | Warning |
-| SC3059 | In POSIX sh, `,` in parameter expansion is undefined | Warning |
-| SC3060 | In POSIX sh, string replacement (`${v//p/s}`) is undefined | Warning |
-| SC3061 | In POSIX sh, `@@` modifier is undefined | Warning |
+| Code | Detailed section |
+|------|------------------|
+| [SC3001](#sc3001) | Process substitution |
+| [SC3003](#sc3003) | `$'...'` syntax |
+| [SC3010](#sc3010) | `[[ ]]` test command |
+| [SC3011](#sc3011) | Here-strings |
+| [SC3014](#sc3014) | `==` in test expressions |
+| [SC3020](#sc3020) | `&>` redirection |
+| [SC3030](#sc3030) | Arrays |
+| [SC3037](#sc3037) | `echo` flags |
+| [SC3043](#sc3043) | `local` keyword |
+| [SC3044](#sc3044) | `declare` / `typeset` / `let` |
+| [SC3045](#sc3045) | Built-in command flags |
+| [SC3046](#sc3046) | `source` vs `.` |
+| [SC3054](#sc3054) | Array references |
+| [SC3060](#sc3060) | String replacement |
 
 ---
 

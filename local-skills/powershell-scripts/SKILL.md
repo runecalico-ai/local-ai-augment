@@ -1,6 +1,6 @@
 ---
 name: powershell-scripts
-description: Use when writing, reviewing, or refactoring .ps1 scripts or .psm1 modules. Also triggers on ParameterBindingException errors, ShouldProcess/WhatIf questions, pipeline-processing problems, PSScriptAnalyzer violations, or converting alias-heavy scripts to approved cmdlet names.
+description: Use when writing, reviewing, or refactoring powershell or pwsh .ps1 scripts or .psm1 modules. Also triggers on ParameterBindingException errors, ShouldProcess/WhatIf questions, pipeline-processing problems, PSScriptAnalyzer violations, or converting alias-heavy scripts to approved cmdlet names.
 ---
 
 # PowerShell Scripts

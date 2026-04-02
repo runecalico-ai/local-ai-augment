@@ -10,6 +10,15 @@ This reference documents common parser errors (SC1000-1999 range) that indicate 
 - [SC1078: Unclosed double quote](#sc1078)
 - [SC1083: Literal braces](#sc1083)
 - [SC1009: Unterminated string](#sc1009)
+- [SC1020: Space before closing bracket](#sc1020)
+- [SC1035: Missing required space](#sc1035)
+- [SC1068: Spaces around = in assignments](#sc1068)
+- [SC1069: Space before opening bracket](#sc1069)
+- [SC1072: Unexpected ..](#sc1072)
+- [SC1077: Wrong tick direction in command substitution](#sc1077)
+- [SC1079: Suspicious end quote](#sc1079)
+- [SC1086: $ on for-loop iterator](#sc1086)
+- [SC1089: Mismatched shell keyword](#sc1089)
 
 ---
 

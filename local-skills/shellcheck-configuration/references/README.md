@@ -5,9 +5,9 @@ This directory contains comprehensive documentation for ShellCheck error codes w
 ## Reference Files
 
 ### [common-errors.md](common-errors.md)
-**Most frequently encountered ShellCheck errors**
+**Selected frequently encountered ShellCheck errors**
 
-Covers the top errors you'll see in real-world scripts:
+Highlights common errors you'll see in real-world scripts, including:
 - SC2086: Quote to prevent word splitting
 - SC2181: Check exit code directly
 - SC2015: && || is not if-then-else
@@ -23,9 +23,9 @@ Covers the top errors you'll see in real-world scripts:
 ---
 
 ### [parser-errors.md](parser-errors.md)
-**Syntax and parsing errors (SC1000-1999)**
+**Selected syntax and parsing errors (SC1000-1999)**
 
-Covers syntax issues that prevent script parsing:
+Highlights representative syntax issues that prevent script parsing, including:
 - SC1004: Backslash+linefeed in single quotes
 - SC1007: Space after = in assignment
 - SC1036: Invalid parenthesis placement
@@ -40,13 +40,21 @@ Covers syntax issues that prevent script parsing:
 ### [posix-compliance.md](posix-compliance.md)
 **POSIX portability issues (SC3000-3999)**
 
-Covers bash-specific features that don't work in POSIX sh:
+Covers the POSIX portability issues documented in detail in this repository (not a full SC3000-SC3999 catalog):
 - SC3001: Process substitution <(cmd)
-- SC3010: [[ ]] test command
-- SC3043: local keyword
 - SC3003: $'...' ANSI-C quoting
+- SC3010: [[ ]] test command
+- SC3011: Here-strings
+- SC3014: == in test expressions
 - SC3020: &> redirection shortcut
 - SC3030: Arrays
+- SC3037: echo flags
+- SC3043: local keyword
+- SC3044: declare/typeset/let
+- SC3045: Built-in command flags
+- SC3046: source vs .
+- SC3054: Array references
+- SC3060: String replacement
 
 **Best for:** Writing portable scripts, targeting /bin/sh or multiple shells
 
@@ -101,9 +109,17 @@ Covers proper quoting to avoid bugs:
 | SC3001 | Process substitution <(cmd) | posix-compliance.md |
 | SC3003 | $'...' ANSI-C quoting | posix-compliance.md |
 | SC3010 | [[ ]] test command | posix-compliance.md |
+| SC3011 | Here-strings | posix-compliance.md |
+| SC3014 | == in test expressions | posix-compliance.md |
 | SC3020 | &> redirection | posix-compliance.md |
 | SC3030 | Arrays | posix-compliance.md |
+| SC3037 | echo flags | posix-compliance.md |
 | SC3043 | local keyword | posix-compliance.md |
+| SC3044 | declare/typeset/let | posix-compliance.md |
+| SC3045 | Built-in command flags | posix-compliance.md |
+| SC3046 | source vs . | posix-compliance.md |
+| SC3054 | Array references | posix-compliance.md |
+| SC3060 | String replacement | posix-compliance.md |
 
 ---
 
