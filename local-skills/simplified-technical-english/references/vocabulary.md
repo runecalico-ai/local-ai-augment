@@ -47,8 +47,8 @@ ASD-STE100 Part 2 is a dictionary of ~900 approved general words (Issue 9, 2025)
 | terminate / conclude | stop / end |
 | attempt | try |
 | assist | help |
-| approximately | about |
-| verify | check |
+| about (used to mean "approximately") | approximately / around |
+| verify | check (to look at something to find if it is correct or in good condition) or make sure (to confirm a condition is met) |
 | acceptable | correct / good |
 
 ### Nominalization (Verb-as-Noun) — Avoid
@@ -62,7 +62,7 @@ Replace noun-heavy phrasing with the direct verb form:
 | make an adjustment | adjust |
 | do a removal | remove |
 | conduct an inspection | inspect |
-| provide confirmation | confirm |
+| provide confirmation | check / make sure |
 
 ---
 
@@ -106,13 +106,15 @@ The `-ing` form is restricted. Use it **only** as:
 
 | Permitted Use | Example |
 |---------------|---------|
-| Technical noun | "the cleaning" (when referring to a process by name) |
-| Modifier in a technical noun | "the cleaning agent", "the programming mode" |
+| Technical noun (a formally named task) | "the Cleaning" (only when formally named in documentation — capitalize to distinguish from generic use) |
+| Modifier in a recognized technical compound | "the operating temperature", "the programming mode", "the cleaning agent" |
+
+> **What counts as a recognized technical compound:** The compound must appear as a fixed term in your project glossary, a governing specification (e.g., S1000D, ATA iSpec 2200), or an industry-standard reference for your domain. Do not create new `-ing` modifier compounds — only use ones already established in your documentation or industry.
 
 **Not permitted:**
 - Present continuous tense: ❌ "is removing"
 - Gerund as sentence connector: ❌ "Before removing the cover, disconnect the power."
-  → ✅ "Disconnect the power. Remove the cover."
+  → ✅ "Disconnect the power. Then remove the cover."
 - Participial phrase: ❌ "Using a wrench, tighten the bolt."
   → ✅ "Use a wrench. Tighten the bolt."
 
