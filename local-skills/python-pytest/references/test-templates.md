@@ -1,6 +1,6 @@
-# Test Templates
+# Framework-Specific Example Sketches
 
-Complete, ready-to-use templates for common testing scenarios.
+These are not drop-in templates. Use them only when the repo already uses the same stack and local testing conventions, and still adapt them to the repo's existing fixtures, helpers, and test layout instead of copying a suite wholesale.
 
 ## Table of Contents
 
@@ -14,6 +14,8 @@ Complete, ready-to-use templates for common testing scenarios.
 
 ## REST API Testing
 
+Use this section only when the repo already uses a similar HTTP client layer and API test shape.
+
 ### Basic API Test Suite
 
 ```python
@@ -24,7 +26,7 @@ from unittest.mock import patch, Mock
 class TestUserAPI:
     """Tests for User API endpoints."""
 
-    @patch("requests.get")
+    @patch("myapp.api.requests.get")
     def test_get_user_success(self, mock_get):
         """Test successful user retrieval."""
         # arrange
@@ -44,12 +46,8 @@ class TestUserAPI:
         # assert
         assert user["name"] == "Alice"
         assert user["email"] == "alice@example.com"
-        mock_get.assert_called_once_with(
-            "https://api.example.com/users/1",
-            timeout=30
-        )
 
-    @patch("requests.get")
+    @patch("myapp.api.requests.get")
     def test_get_user_not_found(self, mock_get):
         """Test user not found returns None."""
         # arrange
@@ -64,7 +62,7 @@ class TestUserAPI:
         # assert
         assert user is None
 
-    @patch("requests.post")
+    @patch("myapp.api.requests.post")
     def test_create_user(self, mock_post):
         """Test creating a new user."""
         # arrange
@@ -90,6 +88,7 @@ class TestUserAPI:
 
 ```python
 import pytest
+from unittest.mock import patch
 
 @pytest.mark.parametrize(
     "status_code,expected_result",
@@ -103,7 +102,7 @@ import pytest
     ],
     ids=["ok", "created", "bad-request", "unauthorized", "not-found", "server-error"]
 )
-@patch("requests.get")
+@patch("myapp.api.requests.get")
 def test_api_status_codes(mock_get, status_code, expected_result):
     """Test API handles various status codes correctly."""
     mock_get.return_value.status_code = status_code
@@ -116,12 +115,16 @@ def test_api_status_codes(mock_get, status_code, expected_result):
 
 ## Database Testing
 
+Use this section only when the repo already uses SQLAlchemy-style ORM tests or a closely related pattern.
+
+If the repo depends on backend-specific transaction or dialect behavior, prefer its existing database harness over these SQLite sketches.
+
 ### Complete Database Test Suite
 
 ```python
 # tests/test_database.py
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from myapp.models import Base, User, Post
 
@@ -135,19 +138,22 @@ def db_engine():
 
 @pytest.fixture
 def db_session(db_engine):
-    """Provide database session with rollback."""
+    """Provide a rollback-only database session for tests that use flush()."""
     Session = sessionmaker(bind=db_engine)
     session = Session()
     yield session
     session.rollback()
     session.close()
 
+# If your tests call commit(), switch to the repo's outer-transaction or
+# savepoint fixture pattern instead of relying on teardown rollback alone.
+
 @pytest.fixture
 def sample_user(db_session):
     """Create a sample user for testing."""
     user = User(name="Alice", email="alice@example.com")
     db_session.add(user)
-    db_session.commit()
+    db_session.flush()
     return user
 
 class TestUserModel:
@@ -158,7 +164,7 @@ class TestUserModel:
         # arrange & act
         user = User(name="Bob", email="bob@example.com")
         db_session.add(user)
-        db_session.commit()
+        db_session.flush()
 
         # assert
         assert user.id is not None
@@ -168,9 +174,9 @@ class TestUserModel:
     def test_query_user_by_email(self, db_session, sample_user):
         """Test querying user by email."""
         # act
-        found = db_session.query(User).filter_by(
-            email="alice@example.com"
-        ).first()
+        found = db_session.execute(
+            select(User).filter_by(email="alice@example.com")
+        ).scalar_one()
 
         # assert
         assert found is not None
@@ -181,10 +187,10 @@ class TestUserModel:
         """Test updating user information."""
         # act
         sample_user.name = "Alice Smith"
-        db_session.commit()
+        db_session.flush()
 
         # assert
-        updated = db_session.query(User).get(sample_user.id)
+        updated = db_session.get(User, sample_user.id)
         assert updated.name == "Alice Smith"
 
     def test_delete_user(self, db_session, sample_user):
@@ -194,10 +200,10 @@ class TestUserModel:
 
         # act
         db_session.delete(sample_user)
-        db_session.commit()
+        db_session.flush()
 
         # assert
-        deleted = db_session.query(User).get(user_id)
+        deleted = db_session.get(User, user_id)
         assert deleted is None
 
     def test_user_posts_relationship(self, db_session, sample_user):
@@ -206,14 +212,17 @@ class TestUserModel:
         post1 = Post(title="First Post", user_id=sample_user.id)
         post2 = Post(title="Second Post", user_id=sample_user.id)
         db_session.add_all([post1, post2])
-        db_session.commit()
+        db_session.flush()
 
         # act
-        user_with_posts = db_session.query(User).get(sample_user.id)
+        user_with_posts = db_session.get(User, sample_user.id)
 
         # assert
         assert len(user_with_posts.posts) == 2
-        assert user_with_posts.posts[0].title == "First Post"
+        assert {post.title for post in user_with_posts.posts} == {
+            "First Post",
+            "Second Post",
+        }
 ```
 
 ## File Processing
@@ -337,11 +346,14 @@ class TestJSONProcessor:
 
 ## CLI Application Testing
 
+Use this section only when the repo already uses a Click-style CLI test setup.
+
 ### Command Line Interface Tests
 
 ```python
 # tests/test_cli.py
 import pytest
+from pathlib import Path
 from click.testing import CliRunner
 from myapp.cli import cli, init, process
 
@@ -398,10 +410,13 @@ class TestCLI:
         """Test different verbosity levels."""
         result = runner.invoke(cli, [*verbosity, "status"])
 
-        assert expected_level in result.output or result.exit_code == 0
+        assert result.exit_code == 0
+        assert expected_level in result.output
 ```
 
 ## Configuration Testing
+
+Use this section only when the repo already uses file-based configuration loading with similar inputs and helpers.
 
 ### Configuration Management Tests
 
@@ -487,12 +502,15 @@ class TestConfig:
 
 ## Authentication Testing
 
+Use this section only when the repo already uses the same auth and token workflow.
+
 ### Authentication and Authorization Tests
 
 ```python
 # tests/test_auth.py
 import pytest
 from datetime import datetime, timedelta
+from unittest.mock import patch
 from myapp.auth import authenticate, create_token, verify_token
 from myapp.models import User
 

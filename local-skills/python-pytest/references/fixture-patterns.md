@@ -2,6 +2,8 @@
 
 Advanced pytest fixture patterns for complex testing scenarios.
 
+These are repo-dependent patterns, not drop-in defaults. Inspect the repo's existing fixtures, transaction harness, markers, plugins, and test runner before copying any example below.
+
 ## Table of Contents
 
 - Factory Fixtures
@@ -51,7 +53,7 @@ def user_factory(db_session):
     def create_user(**kwargs):
         user = User(**kwargs)
         db_session.add(user)
-        db_session.commit()
+        db_session.flush()
         created_users.append(user)
         return user
 
@@ -60,8 +62,10 @@ def user_factory(db_session):
     # Cleanup all created users
     for user in created_users:
         db_session.delete(user)
-    db_session.commit()
+    db_session.flush()
 ```
+
+Only use `commit()` inside a shared factory when the repo already provides outer-transaction isolation or an explicit cleanup strategy.
 
 ## Fixture Composition
 
@@ -71,12 +75,15 @@ Combine multiple fixtures to build complex test scenarios.
 
 ```python
 @pytest.fixture
-def database():
+def database(tmp_path):
     """Provides database connection."""
-    db = Database("test.db")
+    db = Database(tmp_path / "test.db")
     db.connect()
     yield db
     db.disconnect()
+
+# Use a tmp_path-backed file or the repo's existing ephemeral database fixture
+# unless the repo already documents a different harness.
 
 @pytest.fixture
 def db_schema(database):
@@ -207,19 +214,23 @@ def test_processing(sample_data):
 ### Using request.node
 
 ```python
+import logging
+
 @pytest.fixture
 def log_file(request, tmp_path):
     """Creates a log file named after the test."""
     test_name = request.node.name
     log_path = tmp_path / f"{test_name}.log"
 
-    logging.basicConfig(filename=log_path, level=logging.DEBUG)
-    yield log_path
-
-    # Read log for debugging if test failed
-    if request.node.rep_call.failed:
-        print(f"\n--- Log from {test_name} ---")
-        print(log_path.read_text())
+    logger = logging.getLogger(f"test.{test_name}")
+    handler = logging.FileHandler(log_path)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    try:
+        yield log_path
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
 ```
 
 ### Dynamic Configuration
@@ -227,13 +238,10 @@ def log_file(request, tmp_path):
 ```python
 @pytest.fixture
 def server_port(request):
-    """Provides custom port from marker or uses default."""
-    marker = request.node.get_closest_marker("port")
-    if marker:
-        return marker.args[0]
-    return 8080
+    """Provides custom port from parametrization or uses default."""
+    return getattr(request, "param", 8080)
 
-@pytest.mark.port(9000)
+@pytest.mark.parametrize("server_port", [9000], indirect=True)
 def test_custom_port_server(server_port):
     assert server_port == 9000
 
@@ -261,23 +269,22 @@ def reset_global_state():
 ### Logging Setup
 
 ```python
-@pytest.fixture(autouse=True, scope="session")
-def configure_logging():
-    """Configure logging for entire test session."""
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+import logging
+
+@pytest.fixture
+def debug_logging(caplog):
+    """Enable debug logging for one test without mutating global logging."""
+    caplog.set_level(logging.DEBUG, logger="myapp")
+    return caplog
 ```
 
 ### Environment Cleanup
 
 ```python
-@pytest.fixture(autouse=True)
-def clean_environment(monkeypatch):
-    """Ensures clean environment for each test."""
-    # Remove problematic environment variables
-    env_vars_to_remove = ["AWS_PROFILE", "DATABASE_URL"]
+@pytest.fixture
+def clean_test_environment(monkeypatch):
+    """Opt-in environment cleanup for one test or fixture tree."""
+    env_vars_to_remove = ["LEGACY_SERVICE_URL", "EXAMPLE_API_TOKEN"]
     for var in env_vars_to_remove:
         monkeypatch.delenv(var, raising=False)
 ```
@@ -328,6 +335,8 @@ def temp_resources(request, tmp_path):
 ### Error Handling in Teardown
 
 ```python
+import pytest
+
 @pytest.fixture
 def server(request):
     """Starts server with error-safe shutdown."""
@@ -337,11 +346,11 @@ def server(request):
     def shutdown():
         try:
             server.stop(timeout=5)
-        except TimeoutError:
-            print("Server shutdown timed out, forcing kill")
+        except TimeoutError as error:
             server.kill()
-        except Exception as e:
-            print(f"Error during shutdown: {e}")
+            pytest.fail(f"Server shutdown timed out: {error}")
+        except Exception as error:
+            pytest.fail(f"Error during shutdown: {error}")
 
     request.addfinalizer(shutdown)
     yield server
@@ -378,12 +387,16 @@ def transaction(database):
         tx = database.begin()
         try:
             yield tx
-            tx.commit()
         except Exception:
             tx.rollback()
             raise
+        else:
+            tx.rollback()
 
     return _transaction
+
+# If the repo already uses savepoints, outer transactions, or disposable
+# databases per test, mirror that harness before committing inside tests.
 
 def test_with_transaction(transaction):
     with transaction():
@@ -397,7 +410,7 @@ def test_with_transaction(transaction):
 @pytest.fixture
 def api_client(request):
     """Creates API client with optional authentication."""
-    use_auth = request.node.get_closest_marker("authenticated")
+    use_auth = getattr(request, "param", False)
 
     if use_auth:
         client = APIClient(auth=("user", "pass"))
@@ -407,7 +420,7 @@ def api_client(request):
     yield client
     client.close()
 
-@pytest.mark.authenticated
+@pytest.mark.parametrize("api_client", [True], indirect=True)
 def test_protected_endpoint(api_client):
     response = api_client.get("/protected")
     assert response.status == 200

@@ -1,6 +1,16 @@
 # Comprehensive Docstring Examples
 
-This file contains additional real-world examples for various Python docstring scenarios.
+This file contains reference templates for various Python docstring scenarios.
+The surrounding functions and classes show docstring shape and wording. Their
+placeholder bodies use `pass` on purpose.
+
+When you keep an `Examples:` section in real code, make the example runnable as
+written: include imports and setup, use deterministic local data, and avoid
+live services, wall-clock timing, or bare top-level `await`.
+
+Examples labeled `Illustrative template` show the structure to adapt when the
+real implementation depends on infrastructure that is outside this reference
+pack.
 
 ## Table of Contents
 
@@ -8,15 +18,21 @@ This file contains additional real-world examples for various Python docstring s
 2. [API Integration Functions](#api-integration-functions)
 3. [Async Functions](#async-functions)
 4. [Decorators](#decorators)
-5. [Context Managers](#context-managers)
-6. [Type Annotations and Generics](#type-annotations-and-generics)
-7. [Error Handling Patterns](#error-handling-patterns)
+5. [Pytest Fixtures and Tests](#pytest-fixtures-and-tests)
+6. [Context Managers](#context-managers)
+7. [Type Annotations and Generics](#type-annotations-and-generics)
+8. [Overloaded Functions](#overloaded-functions)
+9. [Special Cases](#special-cases)
+10. [Error Handling Patterns](#error-handling-patterns)
 
 ## Data Processing Functions
 
 ### DataFrame Transformation
 
 ```python
+import pandas as pd
+
+
 def merge_customer_data(
     transactions: pd.DataFrame,
     customers: pd.DataFrame,
@@ -29,18 +45,18 @@ def merge_customer_data(
     data quality and handling missing values according to business rules.
 
     Args:
-        transactions (pd.DataFrame): Transaction records with columns:
+        transactions: Transaction records with columns:
             customer_id, amount, date, product_id.
-        customers (pd.DataFrame): Customer records with columns:
+        customers: Customer records with columns:
             customer_id, name, email, tier.
-        on (str, optional): Column name to join on. Defaults to 'customer_id'.
-        how (str, optional): Type of join ('left', 'right', 'inner', 'outer').
+        on: Column name to join on. Defaults to 'customer_id'.
+        how: Type of join ('left', 'right', 'inner', 'outer').
             Defaults to 'left'.
 
     Returns:
-        pd.DataFrame: Merged dataframe with all transaction columns plus
-            customer name, email, and tier. Missing customer data is filled
-            with 'Unknown' for tier and empty string for name/email.
+        Merged dataframe with all transaction columns plus customer name,
+        email, and tier. Missing customer data is filled with 'Unknown' for
+        tier and empty string for name/email.
 
     Raises:
         ValueError: If 'on' column doesn't exist in both dataframes.
@@ -86,15 +102,15 @@ def process_batch(
     """Process items in batches with error handling and optional parallelization.
 
     Args:
-        items (list[dict]): Items to process, each containing 'id' and 'data'.
-        batch_size (int, optional): Number of items per batch. Defaults to 100.
-        parallel (bool, optional): Enable parallel processing. Defaults to False.
-        num_workers (int, optional): Worker count for parallel mode. Defaults to 4.
+        items: Items to process, each containing 'id' and 'data'.
+        batch_size: Number of items per batch. Defaults to 100.
+        parallel: Enable parallel processing. Defaults to False.
+        num_workers: Worker count for parallel mode. Defaults to 4.
 
     Returns:
-        tuple[list[dict], list[Exception]]: A tuple containing:
-            - list[dict]: Successfully processed items with added 'status' field
-            - list[Exception]: Exceptions encountered during processing
+        A tuple containing:
+            - Successfully processed items with added 'status' field.
+            - Exceptions encountered during processing.
 
     Examples:
         Sequential processing:
@@ -125,10 +141,15 @@ def process_batch(
 ### REST API Client
 
 ```python
+from typing import Any
+
+import requests
+
+
 def fetch_paginated_results(
     endpoint: str,
-    params: dict[str, Any] = None,
-    max_pages: int = None,
+    params: dict[str, Any] | None = None,
+    max_pages: int | None = None,
     rate_limit_delay: float = 0.1
 ) -> list[dict]:
     """Fetch all pages of results from paginated API endpoint.
@@ -138,16 +159,16 @@ def fetch_paginated_results(
     max_pages is reached.
 
     Args:
-        endpoint (str): Full URL of the API endpoint.
-        params (dict[str, Any], optional): Query parameters for first request.
+        endpoint: Full URL of the API endpoint.
+        params: Query parameters for first request.
             Defaults to None.
-        max_pages (int, optional): Maximum pages to fetch. None for unlimited.
+        max_pages: Maximum pages to fetch. None for unlimited.
             Defaults to None.
-        rate_limit_delay (float, optional): Seconds to wait between requests.
+        rate_limit_delay: Seconds to wait between requests.
             Defaults to 0.1.
 
     Returns:
-        list[dict]: Combined results from all pages.
+        Combined results from all pages.
 
     Raises:
         requests.HTTPError: If any request returns 4xx or 5xx status.
@@ -155,36 +176,36 @@ def fetch_paginated_results(
         ValueError: If endpoint URL is invalid.
 
     Examples:
-        Fetch all results:
+        Illustrative template against a stubbed client:
         >>> results = fetch_paginated_results(
-        ...     'https://api.example.com/users',
-        ...     params={'active': True}
+        ...     'https://service.test/users',
+        ...     params={'active': True},
+        ...     max_pages=2,
         ... )
-        >>> len(results)
-        523
+        >>> [item['id'] for item in results]
+        [1, 2, 3]
 
-        Limit to first 3 pages:
+        Illustrative template with an explicit page cap:
         >>> results = fetch_paginated_results(
-        ...     'https://api.example.com/posts',
-        ...     max_pages=3
+        ...     'https://service.test/posts',
+        ...     max_pages=1,
         ... )
-        >>> len(results)
-        150  # 50 per page * 3 pages
+        >>> results[0]['page']
+        1
 
-        With rate limiting:
-        >>> import time
-        >>> start = time.time()
+        Illustrative template with rate limiting enabled:
         >>> results = fetch_paginated_results(
-        ...     'https://api.example.com/data',
-        ...     max_pages=5,
-        ...     rate_limit_delay=0.5
+        ...     'https://service.test/data',
+        ...     max_pages=3,
+        ...     rate_limit_delay=0.5,
         ... )
-        >>> elapsed = time.time() - start
-        >>> elapsed >= 2.0  # 4 delays between 5 requests
-        True
+        >>> results[-1]['page']
+        3
 
     Note:
         Automatically retries failed requests up to 3 times with exponential backoff.
+        Use a stubbed client or local test server in docstring examples, and
+        assert on shaped results instead of elapsed time.
     """
     pass
 ```
@@ -202,43 +223,90 @@ async def fetch_multiple_urls(
     """Fetch multiple URLs concurrently with timeout and error handling.
 
     Args:
-        urls (list[str]): List of URLs to fetch.
-        timeout (float, optional): Timeout per request in seconds. Defaults to 10.0.
-        max_concurrent (int, optional): Maximum concurrent requests. Defaults to 10.
+        urls: List of URLs to fetch.
+        timeout: Timeout per request in seconds. Defaults to 10.0.
+        max_concurrent: Maximum concurrent requests. Defaults to 10.
 
     Returns:
-        dict[str, str | Exception]: Mapping of URL to response text or exception.
-            Successful fetches return response text, failures return the exception.
+        Mapping of URL to response text or exception. Successful fetches
+        return response text, failures return the exception.
 
     Examples:
-        Basic concurrent fetch:
-        >>> urls = [
-        ...     'https://example.com/page1',
-        ...     'https://example.com/page2',
-        ...     'https://example.com/page3'
-        ... ]
-        >>> results = await fetch_multiple_urls(urls)
-        >>> len(results)
-        3
-        >>> isinstance(results[urls[0]], str)
+        Illustrative async template with asyncio.run:
+        >>> import asyncio
+        >>> async def main() -> dict[str, str | Exception]:
+        ...     urls = [
+        ...         'https://service.test/page1',
+        ...         'https://service.test/page2',
+        ...     ]
+        ...     return await fetch_multiple_urls(urls)
+        >>> results = asyncio.run(main())
+        >>> sorted(results)
+        ['https://service.test/page1', 'https://service.test/page2']
+
+        Illustrative async template with error handling:
+        >>> import asyncio
+        >>> async def main() -> dict[str, str | Exception]:
+        ...     urls = [
+        ...         'https://service.test/ok',
+        ...         'https://service.test/missing',
+        ...     ]
+        ...     return await fetch_multiple_urls(urls, timeout=5.0)
+        >>> results = asyncio.run(main())
+        >>> isinstance(results['https://service.test/missing'], Exception)
         True
 
-        With timeout and error handling:
-        >>> urls = ['https://example.com', 'https://invalid-url-that-will-fail.xyz']
-        >>> results = await fetch_multiple_urls(urls, timeout=5.0)
-        >>> isinstance(results[urls[1]], Exception)
-        True
-
-        Large batch with concurrency limit:
-        >>> urls = [f'https://api.example.com/item/{i}' for i in range(100)]
-        >>> results = await fetch_multiple_urls(urls, max_concurrent=5)
+        Illustrative async template with a concurrency limit:
+        >>> import asyncio
+        >>> async def main() -> dict[str, str | Exception]:
+        ...     urls = [f'https://service.test/item/{index}' for index in range(5)]
+        ...     return await fetch_multiple_urls(urls, max_concurrent=2)
+        >>> results = asyncio.run(main())
         >>> len(results)
-        100
+        5
 
     Note:
-        Uses aiohttp session with connection pooling for efficiency.
+        Uses aiohttp session with connection pooling for efficiency. Use
+        `asyncio.run()` or your test framework's loop helper instead of bare
+        top-level `await` in docstring examples.
     """
     pass
+```
+
+### Async Method
+
+```python
+class AsyncStatusClient:
+    """Fetch status information from an async backend."""
+
+    async def fetch_status(self, customer_id: str) -> dict[str, str]:
+        """Fetch the latest status payload for a customer.
+
+        Args:
+            customer_id: Customer identifier to query.
+
+        Returns:
+            Status payload for the requested customer.
+        """
+        pass
+```
+
+### Async Generator
+
+```python
+from collections.abc import AsyncIterator
+
+
+async def stream_results(batch_size: int = 100) -> AsyncIterator[dict[str, int]]:
+    """Yield result rows asynchronously in batches.
+
+    Args:
+        batch_size: Number of rows requested per batch.
+
+    Yields:
+        Result rows as they arrive from the upstream service.
+    """
+    yield {"batch_size": batch_size}
 ```
 
 ## Decorators
@@ -246,6 +314,9 @@ async def fetch_multiple_urls(
 ### Retry Decorator
 
 ```python
+from collections.abc import Callable
+
+
 def retry(
     max_attempts: int = 3,
     delay: float = 1.0,
@@ -255,42 +326,92 @@ def retry(
     """Decorator to retry function on failure with exponential backoff.
 
     Args:
-        max_attempts (int, optional): Maximum retry attempts. Defaults to 3.
-        delay (float, optional): Initial delay between retries in seconds.
+        max_attempts: Maximum retry attempts. Defaults to 3.
+        delay: Initial delay between retries in seconds.
             Defaults to 1.0.
-        backoff (float, optional): Multiplier for delay after each retry.
+        backoff: Multiplier for delay after each retry.
             Defaults to 2.0.
-        exceptions (tuple[type[Exception], ...], optional): Exception types
-            to catch and retry. Defaults to (Exception,).
+        exceptions: Exception types to catch and retry. Defaults to
+            (Exception,).
 
     Returns:
-        Callable: Decorated function with retry logic.
+        Decorated function with retry logic.
 
     Examples:
-        Basic retry on any exception:
-        >>> @retry(max_attempts=3, delay=0.1)
+        Deterministic retry on a transient exception:
+        >>> outcomes = iter([ConnectionError("temporary outage"), "success"])
+        >>> @retry(max_attempts=3, delay=0.0, exceptions=(ConnectionError,))
         ... def unstable_function():
-        ...     if random.random() < 0.5:
-        ...         raise ValueError("Random failure")
-        ...     return "success"
-        >>> result = unstable_function()  # Will retry up to 3 times
-        >>> result
+        ...     result = next(outcomes)
+        ...     if isinstance(result, Exception):
+        ...         raise result
+        ...     return result
+        >>> unstable_function()
         'success'
 
         Retry specific exceptions only:
-        >>> @retry(max_attempts=5, delay=0.5, exceptions=(ConnectionError, TimeoutError))
+        >>> outcomes = iter([TimeoutError("try again"), {'status': 'ok'}])
+        >>> @retry(max_attempts=2, delay=0.0, exceptions=(TimeoutError,))
         ... def fetch_data():
-        ...     response = requests.get('https://api.example.com/data', timeout=2)
-        ...     return response.json()
+        ...     result = next(outcomes)
+        ...     if isinstance(result, Exception):
+        ...         raise result
+        ...     return result
+        >>> fetch_data()['status']
+        'ok'
 
-        With exponential backoff:
-        >>> @retry(max_attempts=4, delay=1.0, backoff=2.0)
+        Exponential backoff configuration:
+        >>> outcomes = iter([TimeoutError("slow"), TimeoutError("still slow"), "done"])
+        >>> @retry(max_attempts=4, delay=0.1, backoff=2.0, exceptions=(TimeoutError,))
         ... def api_call():
-        ...     # Delays: 1s, 2s, 4s between attempts
-        ...     return call_rate_limited_api()
+        ...     result = next(outcomes)
+        ...     if isinstance(result, Exception):
+        ...         raise result
+        ...     return result
+        >>> api_call()
+        'done'
 
     Note:
         The decorator logs each retry attempt with the exception details.
+    """
+    pass
+```
+
+## Pytest Fixtures and Tests
+
+Short, obvious pytest fixtures and tests can stay undocumented. Add or expand
+docstrings when fixture lifecycle, isolation rules, or scenario intent would be
+hard to infer from the name and body alone.
+
+### Pytest Fixture
+
+```python
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture
+def configured_client(tmp_path: Path) -> dict[str, str]:
+    """Create an isolated client configuration for integration-style tests.
+
+    The fixture prepares a temporary configuration root so tests can mutate
+    client state without touching shared files.
+
+    Returns:
+        Client settings seeded for the test scenario.
+    """
+    pass
+```
+
+### Pytest Test
+
+```python
+def test_refresh_token_retries_once(configured_client: dict[str, str]) -> None:
+    """Verify refresh retries once after a transient unauthorized response.
+
+    The scenario matters because the retry behavior is the regression target;
+    a bare test name would not explain why one retry is expected.
     """
     pass
 ```
@@ -308,7 +429,7 @@ class DatabaseTransaction:
 
     Args:
         connection: Database connection object (sqlite3, psycopg2, etc.).
-        isolation_level (str, optional): Transaction isolation level.
+        isolation_level: Transaction isolation level.
             Defaults to 'READ COMMITTED'.
 
     Examples:
@@ -318,7 +439,6 @@ class DatabaseTransaction:
         >>> with DatabaseTransaction(conn) as tx:
         ...     tx.connection.execute('CREATE TABLE users (id INTEGER, name TEXT)')
         ...     tx.connection.execute('INSERT INTO users VALUES (1, "Alice")')
-        # Transaction auto-commits here
 
         Automatic rollback on exception:
         >>> try:
@@ -329,7 +449,7 @@ class DatabaseTransaction:
         ...     pass
         >>> cursor = conn.execute('SELECT COUNT(*) FROM users')
         >>> cursor.fetchone()[0]
-        1  # Bob was not inserted due to rollback
+        1
 
         Nested transaction with savepoint:
         >>> with DatabaseTransaction(conn) as outer:
@@ -343,13 +463,26 @@ class DatabaseTransaction:
         ...     # Outer transaction continues
         >>> cursor = conn.execute('SELECT COUNT(*) FROM users')
         >>> cursor.fetchone()[0]
-        2  # Charlie was inserted, David was not
+        2
 
     Attributes:
         connection: The database connection being managed.
-        isolation_level (str): Current isolation level.
+        isolation_level: Current isolation level.
     """
-    pass
+
+    def __init__(self, connection, isolation_level: str = 'READ COMMITTED') -> None:
+        self.connection = connection
+        self.isolation_level = isolation_level
+
+    def __enter__(self) -> "DatabaseTransaction":
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> bool:
+        if exc_type is None:
+            self.connection.commit()
+        else:
+            self.connection.rollback()
+        return False
 ```
 
 ## Type Annotations and Generics
@@ -369,13 +502,13 @@ class LRUCache(Generic[K, V]):
     least recently used items when capacity is reached.
 
     Args:
-        capacity (int): Maximum number of items to cache.
-        loader (Callable[[K], V], optional): Function to load values for cache misses.
+        capacity: Maximum number of items to cache.
+        loader: Function to load values for cache misses.
             Defaults to None.
 
     Attributes:
-        capacity (int): Maximum cache size.
-        size (int): Current number of cached items.
+        capacity: Maximum cache size.
+        size: Current number of cached items.
 
     Examples:
         Basic cache usage with strings and integers:
@@ -405,7 +538,179 @@ class LRUCache(Generic[K, V]):
     Note:
         This implementation uses threading.Lock for thread safety.
     """
+
+    def __init__(self, capacity: int, loader: Callable[[K], V] | None = None) -> None:
+        self.capacity = capacity
+        self.loader = loader
+        self._items: dict[K, V] = {}
+
+    @property
+    def size(self) -> int:
+        return len(self._items)
+
+    def get(self, key: K) -> V | None:
+        if key in self._items:
+            value = self._items.pop(key)
+            self._items[key] = value
+            return value
+        if self.loader is None:
+            return None
+        value = self.loader(key)
+        self.put(key, value)
+        return value
+
+    def put(self, key: K, value: V) -> None:
+        if key in self._items:
+            self._items.pop(key)
+        elif len(self._items) >= self.capacity:
+            oldest_key = next(iter(self._items))
+            self._items.pop(oldest_key)
+        self._items[key] = value
+```
+
+## Overloaded Functions
+
+```python
+from typing import overload
+
+
+@overload
+def parse_customer_id(value: str) -> int:
+    ...
+
+
+@overload
+def parse_customer_id(value: bytes) -> int:
+    ...
+
+
+def parse_customer_id(value: str | bytes) -> int:
+    """Convert a supported raw identifier to an integer.
+
+    Args:
+        value: Raw identifier to convert.
+
+    Returns:
+        Converted integer identifier.
+
+    Raises:
+        ValueError: If the raw value cannot be converted.
+    """
     pass
+```
+
+## Special Cases
+
+### Property Getter
+
+```python
+class CustomerProfile:
+    @property
+    def full_name(self) -> str:
+        """Display name for the current customer."""
+        return "Ada Lovelace"
+```
+
+### Static Method
+
+Use this pattern only when an existing API or framework already requires a
+static method.
+
+```python
+class ConfigValidator:
+    @staticmethod
+    def validate_port(value: int) -> bool:
+        """Validate whether a port number is allowed.
+
+        Args:
+            value: Port number to validate.
+
+        Returns:
+            True when the port is within the allowed range.
+        """
+        pass
+```
+
+### Class Method
+
+```python
+class SessionToken:
+    @classmethod
+    def from_payload(cls, payload: dict[str, str]) -> "SessionToken":
+        """Build a token from a decoded payload.
+
+        Args:
+            payload: Decoded payload values.
+
+        Returns:
+            Session token instance built from the payload.
+        """
+        pass
+```
+
+### Keyword-Only Parameters
+
+```python
+def render_report(customer_id: str, *, include_archived: bool = False) -> dict[str, object]:
+    """Build a report for a single customer.
+
+    Args:
+        customer_id: Customer identifier to load.
+        include_archived: Keyword-only flag that includes archived records.
+
+    Returns:
+        Report payload for the requested customer.
+    """
+    pass
+```
+
+### Dataclass
+
+```python
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass
+class ExportOptions:
+    """Configuration for a CSV export job.
+
+    Attributes:
+        destination: Destination path for the export file.
+        include_headers: Whether to emit a header row.
+    """
+
+    destination: Path
+    include_headers: bool = True
+```
+
+### None-Returning Function
+
+```python
+def log_event(event: str) -> None:
+    """Log an event to the audit stream.
+
+    Args:
+        event: Event description to log.
+
+    Raises:
+        IOError: If the audit stream is unavailable.
+    """
+    pass
+```
+
+### Module Docstring
+
+```python
+"""Utilities for customer exports.
+
+This module coordinates export jobs, validates output paths, and formats
+CSV rows for downstream systems.
+
+Examples:
+    >>> from customer_exports import log_event
+    >>> log_event("export-started")
+"""
 ```
 
 ## Error Handling Patterns
@@ -414,24 +719,24 @@ class LRUCache(Generic[K, V]):
 
 ```python
 class DataValidationError(Exception):
-    """Exception raised for data validation failures with detailed context.
+    """Validation failure with detailed field context.
 
     Provides structured information about validation failures including
     the field that failed, the invalid value, and the validation rule.
 
     Args:
-        message (str): Human-readable error message.
-        field (str): Name of the field that failed validation.
+        message: Human-readable error message.
+        field: Name of the field that failed validation.
         value (Any): The invalid value that was provided.
-        rule (str): Description of the validation rule that was violated.
+        rule: Description of the validation rule that was violated.
         code (str, optional): Machine-readable error code. Defaults to 'VALIDATION_ERROR'.
 
     Attributes:
-        message (str): Error message.
-        field (str): Failed field name.
+        message: Error message.
+        field: Failed field name.
         value (Any): Invalid value.
-        rule (str): Violated rule.
-        code (str): Error code.
+        rule: Violated rule.
+        code: Error code.
 
     Examples:
         Basic validation error:
@@ -447,7 +752,12 @@ class DataValidationError(Exception):
 
         Catching and inspecting:
         >>> try:
-        ...     validate_age(-5)
+        ...     raise DataValidationError(
+        ...         message="Age must be positive",
+        ...         field="age",
+        ...         value=-5,
+        ...         rule="Must be greater than or equal to 0",
+        ...     )
         ... except DataValidationError as e:
         ...     print(f"Field '{e.field}' failed: {e.message}")
         ...     print(f"Invalid value: {e.value}")
@@ -471,6 +781,9 @@ class DataValidationError(Exception):
 ### Validation with Multiple Errors
 
 ```python
+from typing import Any
+
+
 def validate_user_input(
     data: dict[str, Any],
     schema: dict[str, dict],
@@ -479,16 +792,16 @@ def validate_user_input(
     """Validate user input against schema with comprehensive error collection.
 
     Args:
-        data (dict[str, Any]): User input data to validate.
-        schema (dict[str, dict]): Validation schema where keys are field names
+        data: User input data to validate.
+        schema: Validation schema where keys are field names
             and values are dicts with 'type', 'required', 'min', 'max', 'pattern', etc.
-        strict (bool, optional): If True, reject extra fields not in schema.
+        strict: If True, reject extra fields not in schema.
             Defaults to True.
 
     Returns:
-        tuple[bool, list[DataValidationError]]: A tuple containing:
-            - bool: True if validation passed, False otherwise
-            - list[DataValidationError]: List of all validation errors found
+        A tuple containing:
+            - True if validation passed, otherwise False.
+            - All validation errors found.
 
     Examples:
         Valid input:

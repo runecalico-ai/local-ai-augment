@@ -6,9 +6,10 @@ Python dataclasses support `Generic` for typed containers.
 
 ```python
 from dataclasses import dataclass, field
-from typing import Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 
 T = TypeVar('T')
+U = TypeVar('U')
 K = TypeVar('K')
 V = TypeVar('V')
 
@@ -17,7 +18,7 @@ class Box(Generic[T]):
     value: T
     label: str = ""
 
-    def map(self, func) -> 'Box':
+    def map(self, func: Callable[[T], U]) -> 'Box[U]':
         return Box(value=func(self.value), label=self.label)
 
 box: Box[int] = Box(value=42, label="answer")
@@ -114,7 +115,7 @@ class Circle(Shape):
 
 ## Protocol Compliance
 
-Dataclasses can satisfy `Protocol` interfaces without explicit inheritance.
+Dataclasses can satisfy `Protocol` interfaces without explicit inheritance, but any `from_dict` example here assumes trusted or already-validated mappings, not raw boundary data.
 
 ```python
 from dataclasses import dataclass
@@ -143,11 +144,13 @@ class UserDTO:
 assert isinstance(UserDTO(1, "a", "b"), Serializable)  # True at runtime
 ```
 
+`@runtime_checkable` only performs a shallow runtime attribute check. Real protocol conformance still depends on static type checking.
+
 ---
 
 ## Pattern Matching Support (`match_args`)
 
-Python 3.10+ dataclasses generate `__match_args__` automatically, enabling structural pattern matching.
+Python 3.10+ dataclasses generate `__match_args__` automatically from non-keyword-only fields, enabling structural pattern matching. Keyword-only fields are excluded, so `@dataclass(kw_only=True)` disables positional matching unless you define `__match_args__` manually.
 
 ```python
 from dataclasses import dataclass
@@ -169,6 +172,8 @@ class Rectangle:
 
 def describe_shape(shape) -> str:
     match shape:
+        case Point(0, y):
+            return f"Point on y-axis at y={y}"
         case Circle(center=Point(x=0, y=0), radius=r):
             return f"Circle centered at origin, r={r}"
         case Circle(center=c, radius=r):
@@ -182,6 +187,8 @@ def describe_shape(shape) -> str:
 ---
 
 ## Factory Patterns
+
+Keep `from_dict` factories for trusted or already-validated mappings. For untrusted JSON, HTTP, file, or environment-variable input, do not rely on a plain dataclass factory as the only validation or coercion layer; validate first or prefer Pydantic v2.
 
 ### Class Factory Methods (prefer over complex `__post_init__`)
 
@@ -198,13 +205,18 @@ class Event:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
-    def all_day(cls, name: str, date: datetime, attendees=None) -> 'Event':
+    def all_day(
+        cls,
+        name: str,
+        date: datetime,
+        attendees: list[str] | None = None,
+    ) -> 'Event':
         """Factory for an all-day event."""
         return cls(
             name=name,
             start=date.replace(hour=0, minute=0, second=0),
             end=date.replace(hour=23, minute=59, second=59),
-            attendees=attendees or [],
+            attendees=[] if attendees is None else attendees.copy(),
         )
 
     @classmethod
@@ -213,9 +225,11 @@ class Event:
             name=data['name'],
             start=datetime.fromisoformat(data['start']),
             end=datetime.fromisoformat(data['end']),
-            attendees=data.get('attendees', []),
+            attendees=data.get('attendees', []).copy(),
         )
 ```
+
+Use `None` as the sentinel for “not provided”, and copy caller-supplied mutables so the new instance does not share list state with the caller.
 
 ---
 
@@ -232,7 +246,7 @@ class Command:
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if hasattr(cls, 'name'):
+        if 'name' in cls.__dict__:
             Command._registry[cls.name] = cls
 
     @classmethod
@@ -257,6 +271,8 @@ cmd = Command.dispatch('start', service='api')
 assert isinstance(cmd, StartCommand)
 ```
 
+With `slots=True` on Python 3.10+, avoid parameterized base `__init_subclass__` hooks unless every parameter has a default; otherwise subclass creation raises `TypeError`. For this registration pattern, prefer post-decoration registration or avoid `slots=True`, because `__init_subclass__` runs before the replacement slotted class exists.
+
 ---
 
 ## Computed Fields Excluded from `__init__`
@@ -278,8 +294,8 @@ class BoundingBox:
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0:
             raise ValueError("width and height must be positive")
-        object.__setattr__(self, 'area', self.width * self.height)
-        object.__setattr__(self, 'aspect_ratio', self.width / self.height)
+        self.area = self.width * self.height
+        self.aspect_ratio = self.width / self.height
 
 # For frozen dataclasses, use object.__setattr__ inside __post_init__
 @dataclass(frozen=True)
@@ -321,64 +337,51 @@ leaf = LeafNode(value=5, label="leaf-A", parent=Node(value=0))
 
 ---
 
-## Dataclass with `__slots__` and Properties (Manual Pattern, Pre-3.10)
-
-Before Python 3.10's `slots=True`, slots and properties together required extra care:
-
-```python
-from dataclasses import dataclass
-
-# Python 3.10+: use slots=True directly
-@dataclass(slots=True)
-class Point3D:
-    x: float
-    y: float
-    z: float = 0.0
-
-    @property
-    def magnitude(self) -> float:
-        return (self.x**2 + self.y**2 + self.z**2) ** 0.5
-
-# Python 3.9 and below: manual approach needed (avoid this if possible)
-```
-
----
-
 ## Testing Dataclasses
+
+For broader pytest guidance, use the **python-pytest** skill. The example below is self-contained and runnable.
 
 ```python
 import pytest
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, dataclass, field, replace
+from datetime import date
 
-# Test construction and defaults
-def test_log_entry_defaults():
-    entry = LogEntry(message="hello")
-    assert entry.level == "INFO"
-    assert entry.tags == []
-    assert entry.tags is not LogEntry(message="other").tags  # separate instances
+@dataclass
+class LogEntry:
+    message: str
+    tags: list[str] = field(default_factory=list)
 
-# Test immutability
-def test_frozen_dataclass_is_immutable():
+@dataclass(frozen=True)
+class Color:
+    r: int
+    g: int
+    b: int
+
+@dataclass
+class DateRange:
+    start: date
+    end: date
+
+    def __post_init__(self) -> None:
+        if self.end <= self.start:
+            raise ValueError("end must be after start")
+
+def test_log_entry_uses_distinct_default_lists():
+    first = LogEntry("hello")
+    second = LogEntry("world")
+    assert first.tags == []
+    assert first.tags is not second.tags
+
+def test_frozen_dataclass_blocks_rebinding():
     c = Color(255, 0, 0)
     with pytest.raises(FrozenInstanceError):
         c.r = 128
 
-# Test replace (immutable update)
-def test_replace():
-    original = Config(host="prod.example.com", port=443)
-    dev = replace(original, host="localhost", port=8080)
-    assert dev.host == "localhost"
-    assert dev.port == 8080
-    assert original.host == "prod.example.com"   # unchanged
+def test_post_init_validation_rejects_inverted_range():
+    with pytest.raises(ValueError, match="end must be after"):
+        DateRange(date(2025, 6, 1), date(2025, 5, 1))
 
-# Test post_init validation
-def test_date_range_rejects_inverted_range():
-    with pytest.raises(ValueError, match="end.*must be after"):
-        DateRange(start=date(2025, 6, 1), end=date(2025, 5, 1))
-
-# Test ordering
-def test_version_ordering():
-    assert Version(1, 0) < Version(2, 0)
-    assert Version(2, 0, 1) > Version(2, 0, 0)
-    assert sorted([Version(2,1), Version(1,0)]) == [Version(1,0), Version(2,1)]
+def test_replace_rebuilds_value_fields():
+    updated = replace(Color(1, 2, 3), g=9)
+    assert updated == Color(1, 9, 3)
 ```

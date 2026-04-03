@@ -2,6 +2,8 @@
 
 Comprehensive patterns for mocking in pytest tests.
 
+These examples are repo-dependent patterns, not drop-in defaults. Inspect the repo's existing seams, fixtures, helpers, and runner before copying a mocking strategy.
+
 ## Table of Contents
 
 - Mock vs Monkeypatch
@@ -16,6 +18,8 @@ Comprehensive patterns for mocking in pytest tests.
 
 Choose the right tool for the job.
 
+Patch where the code under test looks up the symbol, not the library definition in isolation.
+
 ### When to Use Mock
 
 Use `unittest.mock` for:
@@ -25,8 +29,9 @@ Use `unittest.mock` for:
 
 ```python
 from unittest.mock import Mock, patch
+from myapp.api import fetch_data
 
-@patch("requests.get")
+@patch("myapp.api.requests.get")
 def test_api_call(mock_get):
     mock_get.return_value.status_code = 200
     mock_get.return_value.json.return_value = {"data": "value"}
@@ -65,7 +70,7 @@ def test_attribute_patch(monkeypatch):
 ```python
 from unittest.mock import patch, Mock
 
-@patch("requests.get")
+@patch("myapp.api.requests.get")
 def test_fetch_user_success(mock_get):
     # Setup mock response
     mock_response = Mock()
@@ -87,7 +92,10 @@ def test_fetch_user_success(mock_get):
 ### Mocking with Side Effects
 
 ```python
-@patch("requests.post")
+from unittest.mock import Mock, patch
+from myapp.api import api_call_with_retry
+
+@patch("myapp.api.requests.post")
 def test_retry_on_failure(mock_post):
     # First call fails, second succeeds
     mock_post.side_effect = [
@@ -103,7 +111,10 @@ def test_retry_on_failure(mock_post):
 ### Mocking Exceptions
 
 ```python
-@patch("requests.get")
+import requests
+from unittest.mock import patch
+
+@patch("myapp.api.requests.get")
 def test_network_error_handling(mock_get):
     mock_get.side_effect = requests.ConnectionError("Network unavailable")
 
@@ -115,8 +126,11 @@ def test_network_error_handling(mock_get):
 
 ### Using responses Library
 
+Use this only if the repo already depends on `responses`; otherwise prefer `patch` or `monkeypatch`.
+
 ```python
 import responses
+from myapp.api import fetch_user
 
 @responses.activate
 def test_api_with_responses():
@@ -137,6 +151,7 @@ def test_api_with_responses():
 
 ```python
 from unittest.mock import mock_open, patch
+from myapp.config import read_config
 
 def test_read_config():
     mock_data = "debug: true\nport: 8080"
@@ -149,6 +164,8 @@ def test_read_config():
 ### Using tmp_path (Preferred)
 
 ```python
+from myapp.config import read_config
+
 def test_read_config_with_real_file(tmp_path):
     # Create real temporary file
     config_file = tmp_path / "config.yaml"
@@ -161,8 +178,11 @@ def test_read_config_with_real_file(tmp_path):
 ### Mocking pathlib
 
 ```python
-@patch("pathlib.Path.exists")
-@patch("pathlib.Path.read_text")
+from unittest.mock import patch
+from myapp.files import load_file
+
+@patch("myapp.files.Path.exists")
+@patch("myapp.files.Path.read_text")
 def test_file_content(mock_read, mock_exists):
     mock_exists.return_value = True
     mock_read.return_value = "test content"
@@ -175,9 +195,12 @@ def test_file_content(mock_read, mock_exists):
 
 ### Using freezegun
 
+Use this only if the repo already depends on `freezegun`; otherwise prefer patching the time boundary directly.
+
 ```python
 from freezegun import freeze_time
 from datetime import datetime
+from myapp.reports import generate_report
 
 @freeze_time("2024-01-15 10:30:00")
 def test_timestamp():
@@ -190,6 +213,7 @@ def test_timestamp():
 ```python
 from unittest.mock import patch
 from datetime import datetime
+from myapp.utils import get_current_timestamp
 
 @patch("myapp.utils.datetime")
 def test_current_time(mock_datetime):
@@ -203,14 +227,15 @@ def test_current_time(mock_datetime):
 
 ```python
 import random
+from unittest.mock import patch
+from myapp.game import roll_dice, shuffle_items
 
 def test_random_selection():
-    random.seed(42)  # Deterministic randomness
+    first = shuffle_items([1, 2, 3, 4, 5], rng=random.Random(42))
+    second = shuffle_items([1, 2, 3, 4, 5], rng=random.Random(42))
+    assert first == second
 
-    result = shuffle_items([1, 2, 3, 4, 5])
-    assert result == [2, 5, 4, 1, 3]  # Always same order
-
-@patch("random.randint")
+@patch("myapp.game.random.randint")
 def test_random_number(mock_randint):
     mock_randint.return_value = 7
 
@@ -220,30 +245,32 @@ def test_random_number(mock_randint):
 
 ## Database Mocking
 
-### Mocking Database Queries
+### Mocking a Repository Boundary
 
 ```python
-from unittest.mock import Mock, patch
+from unittest.mock import patch
+from myapp.models import User
+from myapp.services.users import get_user_by_id
 
-@patch("myapp.db.session.query")
-def test_get_user(mock_query):
-    # Setup mock
-    mock_user = Mock()
-    mock_user.id = 1
-    mock_user.name = "Alice"
-    mock_query.return_value.filter.return_value.first.return_value = mock_user
+@patch("myapp.services.users.fetch_user")
+def test_get_user(mock_fetch_user):
+    mock_fetch_user.return_value = {"id": 1, "name": "Alice"}
 
-    # Test
     user = get_user_by_id(1)
-    assert user.name == "Alice"
+    assert user["name"] == "Alice"
 ```
 
-### Using In-Memory Database (Preferred)
+### Using the Repo's Database Test Strategy
+
+Prefer the repo's existing database fixture or container strategy. The SQLite example below is only a fallback when the repo already uses it or the code path is genuinely dialect-agnostic.
+
+SQLite in-memory databases are connection-scoped. If the repo needs shared state across connections or threads, use the repo's existing harness or a tmp_path-backed database instead of assuming one shared in-memory database.
 
 ```python
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
+from myapp.models import Base, User
 
 @pytest.fixture
 def db_session():
@@ -260,18 +287,23 @@ def db_session():
 def test_create_user(db_session):
     user = User(name="Alice", email="alice@example.com")
     db_session.add(user)
-    db_session.commit()
+    db_session.flush()
 
-    found = db_session.query(User).filter_by(name="Alice").first()
+    found = db_session.execute(
+        select(User).filter_by(name="Alice")
+    ).scalar_one()
     assert found.email == "alice@example.com"
 ```
 
-### Mocking Query Results
+### Patching a Repository Seam
 
 ```python
-@patch("myapp.models.User.query")
-def test_user_count(mock_query):
-    mock_query.count.return_value = 42
+from unittest.mock import patch
+from myapp.services.users import get_user_count
+
+@patch("myapp.services.users.count_users")
+def test_user_count(mock_count_users):
+    mock_count_users.return_value = 42
 
     count = get_user_count()
     assert count == 42
@@ -283,6 +315,7 @@ def test_user_count(mock_query):
 
 ```python
 from unittest.mock import Mock, patch
+from myapp.services import send_welcome_email
 
 @patch("myapp.services.EmailService")
 def test_send_notification(MockEmailService):
@@ -303,12 +336,14 @@ def test_send_notification(MockEmailService):
 ### Mocking Instance Methods
 
 ```python
+from myapp.services.user_service import UserService
+
 def test_user_service(monkeypatch):
     class MockDatabase:
         def get_user(self, user_id):
             return {"id": user_id, "name": "Test User"}
 
-    monkeypatch.setattr("myapp.database.Database", MockDatabase)
+    monkeypatch.setattr("myapp.services.user_service.Database", MockDatabase)
 
     service = UserService()
     user = service.fetch_user(1)
@@ -319,6 +354,7 @@ def test_user_service(monkeypatch):
 
 ```python
 from unittest.mock import patch
+from myapp.math import Calculator
 
 class TestCalculator:
     def test_complex_operation(self):
@@ -334,6 +370,7 @@ class TestCalculator:
 
 ```python
 from unittest.mock import PropertyMock, patch
+from myapp.models import User
 
 @patch("myapp.models.User.is_active", new_callable=PropertyMock)
 def test_active_user(mock_is_active):
@@ -349,6 +386,7 @@ def test_active_user(mock_is_active):
 
 ```python
 from unittest.mock import Mock
+from myapp.processor import process_items
 
 def test_callback_called():
     callback = Mock()
@@ -362,6 +400,9 @@ def test_callback_called():
 ### Multiple Side Effects
 
 ```python
+from unittest.mock import patch
+from myapp.api import fetch_all_pages
+
 @patch("myapp.api.fetch_data")
 def test_pagination(mock_fetch):
     # Different responses for each call
@@ -379,7 +420,10 @@ def test_pagination(mock_fetch):
 ### Callable Side Effects
 
 ```python
-@patch("requests.get")
+from unittest.mock import Mock, patch
+from myapp.api import fetch
+
+@patch("myapp.api.requests.get")
 def test_dynamic_responses(mock_get):
     def dynamic_response(url):
         if "users" in url:
@@ -396,9 +440,10 @@ def test_dynamic_responses(mock_get):
 ### Verifying Call Arguments
 
 ```python
-from unittest.mock import call
+from unittest.mock import call, patch
+from myapp.worker import process_with_logging
 
-@patch("myapp.logger.log")
+@patch("myapp.worker.logger.log")
 def test_logging_calls(mock_log):
     process_with_logging([1, 2, 3])
 
@@ -422,16 +467,16 @@ def test_logging_calls(mock_log):
 ### Mocking Context Managers
 
 ```python
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
+from myapp.db_client import run_query
 
-@patch("myapp.db.get_connection")
+@patch("myapp.db_client.get_connection")
 def test_database_context(mock_get_connection):
     mock_conn = MagicMock()
     mock_conn.__enter__.return_value = mock_conn
     mock_get_connection.return_value = mock_conn
 
-    with get_connection() as conn:
-        conn.execute("SELECT 1")
+    run_query("SELECT 1")
 
     mock_conn.execute.assert_called_once_with("SELECT 1")
     mock_conn.__exit__.assert_called_once()

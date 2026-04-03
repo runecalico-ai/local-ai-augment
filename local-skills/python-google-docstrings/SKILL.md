@@ -1,17 +1,20 @@
 ---
 name: python-google-docstrings
-description: Expert Python docstring writer using Google Style format with enhanced examples section. Use when writing or reviewing Python function, class, or module docstrings. Provides comprehensive templates for functions, classes, methods, modules, and special cases with proper formatting, type hints, and practical examples.
+description: Use when writing or reviewing Google-style Python docstrings for modules, public or non-obvious callables, pytest fixtures/tests, property, dataclass, overload, and override edge cases, and signature/docstring synchronization audits.
 ---
 
 # Python Google Docstrings
 
-Expert guidance for writing comprehensive Python docstrings following the Google Style Guide with enhanced example sections.
+Expert guidance for writing practical Python docstrings that align with the current Google Python Style Guide.
 
 ## When to Use This Skill
 
 - Writing docstrings for Python functions, methods, classes, or modules
 - Reviewing or refactoring existing docstrings for consistency
-- Adding examples to existing docstrings
+- Documenting pytest fixtures and tests when lifecycle or scenario intent is not obvious
+- Running or interpreting signature/docstring synchronization audits
+- Handling properties, overloads, and similar edge cases
+- Adding examples where a concrete call improves clarity
 - Ensuring proper formatting and completeness of documentation
 - Converting other docstring formats to Google Style
 
@@ -21,27 +24,40 @@ Expert guidance for writing comprehensive Python docstrings following the Google
 
 Google Style docstrings use section headers followed by indented content. Each section is separated by a blank line.
 
-### Standard Sections (in order)
+### Common Sections
 
-1. **Summary Line** - One-line summary ending with period
+1. **Summary Line** - One physical line, 80 characters or fewer, ending with `.` `?` or `!`
 2. **Extended Description** (optional) - Additional details, separated by blank line
-3. **Args** - Function/method parameters
-4. **Returns** - Return value description
-5. **Yields** - For generators
-6. **Raises** - Exceptions that may be raised
-7. **Examples** - Practical usage examples (enhanced addition)
-8. **Note** - Additional notes (optional)
-9. **See Also** (optional) - Related functions/classes
-10. **References** (optional) - External references
+3. **Args** - Parameters that need explanation
+4. **Returns** or **Yields** - Semantics the summary line and annotations do not already make clear; for in-scope non-None callables, use either an explicit section or a summary line that clearly starts with `Return` / `Returns` or `Yield` / `Yields`
+5. **Raises** - Exceptions relevant to the interface
+6. **Examples** (optional) - Add when a concrete call or output makes usage clearer
+7. **Note** (optional) - Additional notes
+8. **See Also** (optional) - Related functions/classes
+9. **References** (optional) - External references
+
+Use only the sections the reader needs. A one-line docstring is fine when the
+callable is simple, returns `None`, or is otherwise out of scope for richer
+sections under this skill.
+The bundled audits are conservative about `Raises:`: they catch missing
+documentation for explicit raise paths, but propagated or stale exception notes
+still require manual review.
 
 ### Key Formatting Rules
 
 - Use triple double-quotes `"""`
-- First line is a brief summary (imperative mood)
-- Args section uses `name (type): Description` format
-- Indent section content by 4 spaces
-- Examples section should include `>>>` for interactive examples
-- Always include type information in Args and Returns
+- First line is a brief summary; descriptive or imperative style is fine if it
+    is consistent within a file
+- Keep the summary line within 80 characters
+- In `Args`, `Returns`, and `Yields`, include type text when annotations do not
+    already communicate it
+- When a keyword-only calling constraint matters to readers, mention it in the
+    `Args` description
+- Use consistent section indentation; 4 spaces is the bundle default
+- If you include interactive examples, use `>>>`
+
+The templates below show fuller patterns than every production docstring needs.
+Omit sections that do not add value.
 
 ## Function Docstrings
 
@@ -55,18 +71,18 @@ def function_name(arg1: str, arg2: int, optional_arg: bool = False) -> dict:
     This can span multiple lines and paragraphs if needed.
 
     Args:
-        arg1 (str): Description of the first argument.
-        arg2 (int): Description of the second argument.
-        optional_arg (bool, optional): Description of optional argument.
+        arg1: Description of the first argument.
+        arg2: Description of the second argument.
+        optional_arg: Description of optional argument.
             Defaults to False.
 
     Returns:
-        dict: Description of the return value. Include structure if complex,
-            e.g., {'key1': value1_description, 'key2': value2_description}.
+        Description of the return value. Include structure if complex, e.g.,
+        {'key1': value1_description, 'key2': value2_description}.
 
     Raises:
-        ValueError: When arg2 is negative.
-        TypeError: When arg1 is not a string.
+        LookupError: If the requested record cannot be found.
+        RuntimeError: If the backend rejects the update after validation.
 
     Examples:
         Basic usage:
@@ -92,10 +108,10 @@ def fetch_user_data(user_id: int) -> dict[str, Any]:
     """Retrieve comprehensive user information from database.
 
     Args:
-        user_id (int): Unique identifier for the user.
+        user_id: Unique identifier for the user.
 
     Returns:
-        dict[str, Any]: User data dictionary with the following structure:
+        User data dictionary with the following structure:
             - 'id' (int): User identifier
             - 'name' (str): Full name
             - 'email' (str): Email address
@@ -129,9 +145,9 @@ class DataProcessor:
     state for caching and optimization.
 
     Args:
-        cache_size (int, optional): Maximum number of cached items.
+        cache_size: Maximum number of cached items.
             Defaults to 100.
-        strict_mode (bool, optional): Enable strict validation.
+        strict_mode: Enable strict validation.
             Defaults to True.
 
     Attributes:
@@ -163,12 +179,12 @@ class DataProcessor:
         """Load data from CSV file into DataFrame.
 
         Args:
-            filepath (str): Path to the CSV file.
-            delimiter (str, optional): Field delimiter character.
+            filepath: Path to the CSV file.
+            delimiter: Field delimiter character.
                 Defaults to ','.
 
         Returns:
-            pd.DataFrame: Loaded data with inferred column types.
+            Loaded data with inferred column types.
 
         Raises:
             FileNotFoundError: If filepath does not exist.
@@ -193,12 +209,12 @@ def read_large_file(filepath: str, chunk_size: int = 1024) -> Generator[str, Non
     """Read large file in chunks to avoid memory issues.
 
     Args:
-        filepath (str): Path to file to read.
-        chunk_size (int, optional): Number of bytes per chunk.
+        filepath: Path to file to read.
+        chunk_size: Number of bytes per chunk.
             Defaults to 1024.
 
     Yields:
-        str: Next chunk of file content.
+        Next chunk of file content.
 
     Raises:
         FileNotFoundError: If filepath does not exist.
@@ -214,7 +230,7 @@ def read_large_file(filepath: str, chunk_size: int = 1024) -> Generator[str, Non
         >>> len(chunks)
         250
     """
-    pass
+    yield ""
 ```
 
 ## Module Docstrings
@@ -253,24 +269,93 @@ Note:
 
 ### Property Docstrings
 
+Document `@property` and `@cached_property` docstrings like attributes, not
+zero-argument methods.
+Use a short descriptive summary of what the property represents. Omit `Args:`
+and do not add `Returns:` by default. If a specific codebase has an
+established local convention for richer property docstrings, treat that as an
+optional exception rather than the default. This default guidance applies to
+getter-like property APIs. The bundled helpers always treat property setters
+and deleters as out of scope. If a local codebase documents them as part of
+the public contract, review them manually rather than relying on helper output.
+The helpers also do not treat an existing `Returns:` block on a property as
+drift by itself, because some codebases intentionally keep richer
+property-style docs.
+
 ```python
 @property
 def full_name(self) -> str:
-    """Get user's full name combining first and last names.
-
-    Returns:
-        str: Full name in "First Last" format.
-
-    Examples:
-        >>> user.first_name = "John"
-        >>> user.last_name = "Doe"
-        >>> user.full_name
-        'John Doe'
-    """
+    """User's full name in "First Last" format."""
     return f"{self.first_name} {self.last_name}"
 ```
 
+### Overloaded Functions
+
+Skip docstrings on `@overload` stubs. Document only the concrete
+implementation that carries the real body.
+
+```python
+from typing import overload
+
+
+@overload
+def coerce_id(value: str) -> int:
+    ...
+
+
+@overload
+def coerce_id(value: bytes) -> int:
+    ...
+
+
+def coerce_id(value: str | bytes) -> int:
+    """Convert a supported raw value to an integer identifier.
+
+    Args:
+        value: Raw identifier value to convert.
+
+    Returns:
+        Converted integer identifier.
+    """
+    return len(value)
+```
+
+### Dataclasses
+
+Document dataclass fields in the class docstring rather than inventing
+docstrings for generated methods. Prefer `Attributes:` for stored state and use
+`Args:` only when constructor-specific semantics need explanation.
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass
+class SyncRequest:
+    """Request payload for a sync operation.
+
+    Attributes:
+        customer_id: Customer identifier to synchronize.
+        enabled: Whether the sync should run.
+    """
+
+    customer_id: str
+    enabled: bool = True
+```
+
+### Overridden Methods
+
+`@override` methods may omit a local docstring when the inherited contract is
+still sufficient. The bundled helpers treat docstring-less overrides as manual
+exceptions, but they do not verify that the inherited documentation is correct
+or complete. If an override changes behavior, side effects, outputs, or
+exceptions, write or expand a local docstring.
+
 ### Static Methods
+
+Avoid introducing new `@staticmethod` members unless an existing public API,
+framework hook, or external interface already requires one. When you do have
+to document a static method, treat it like any other callable.
 
 ```python
 @staticmethod
@@ -278,10 +363,10 @@ def validate_config(config: dict) -> bool:
     """Validate configuration dictionary structure and values.
 
     Args:
-        config (dict): Configuration dictionary to validate.
+        config: Configuration dictionary to validate.
 
     Returns:
-        bool: True if valid, False otherwise.
+        True if valid, False otherwise.
 
     Examples:
         >>> valid_config = {'host': 'localhost', 'port': 8080}
@@ -303,10 +388,10 @@ def from_json(cls, json_str: str) -> 'MyClass':
     """Create instance from JSON string.
 
     Args:
-        json_str (str): JSON representation of object.
+        json_str: JSON representation of object.
 
     Returns:
-        MyClass: New instance populated from JSON data.
+        New instance populated from JSON data.
 
     Raises:
         JSONDecodeError: If json_str is invalid JSON.
@@ -322,13 +407,17 @@ def from_json(cls, json_str: str) -> 'MyClass':
 
 ## Examples Section Guidelines
 
-The Examples section is an enhanced addition to standard Google Style. It should:
+Examples are helpful but optional. Add an `Examples:` section when a concrete
+call, expected output, edge case, or return shape is easier to understand from
+an example than from prose alone.
+
+If you include examples:
 
 1. **Use realistic scenarios** - Show actual use cases, not toy examples
-2. **Include expected output** - Use `>>>` for interactive examples
-3. **Cover common patterns** - Basic usage first, then advanced
-4. **Show edge cases** when relevant
-5. **Be executable** - Examples should work if copied
+2. **Prefer interactive style when appropriate** - Use `>>>` for REPL-style examples
+3. **Lead with the common path** - Show the main usage before edge cases
+4. **Add edge cases when they materially help** - Do not pad the docstring
+5. **Keep them executable and accurate** - Examples should work if copied
 
 ### Multiple Example Patterns
 
@@ -337,12 +426,12 @@ def calculate_statistics(data: list[float], percentiles: list[int] = None) -> di
     """Calculate descriptive statistics for numerical data.
 
     Args:
-        data (list[float]): Numerical data to analyze.
-        percentiles (list[int], optional): Percentile values to compute.
+        data: Numerical data to analyze.
+        percentiles: Percentile values to compute.
             Defaults to [25, 50, 75].
 
     Returns:
-        dict: Statistics including mean, median, std, and percentiles.
+        Statistics including mean, median, std, and percentiles.
 
     Examples:
         Basic usage with default percentiles:
@@ -376,27 +465,46 @@ def calculate_statistics(data: list[float], percentiles: list[int] = None) -> di
 
 ### Checklist for Complete Docstrings
 
-- [ ] Summary line (one line, imperative mood, ends with period)
+- [ ] Summary line (one physical line, <= 80 chars, consistent style,
+        ends with `.`, `?`, or `!`)
 - [ ] Extended description (if needed for clarity)
-- [ ] Args section (all parameters with types)
-- [ ] Returns section (type and structure)
-- [ ] Raises section (all exceptions that may be raised)
-- [ ] Examples section (at least one realistic example)
+- [ ] Args section explains parameters; include type text only when needed
+- [ ] Returns or Yields section adds semantics or type detail not already clear
+- [ ] Raises section covers interface-relevant exceptions
+- [ ] Examples section only when it materially helps the caller
 - [ ] Type hints in function signature match docstring
-- [ ] Examples are executable and produce stated output
+- [ ] Examples are executable and produce stated output, if included
 
 ### Common Mistakes to Avoid
 
-1. **Missing type information** - Always specify types in Args and Returns
+1. **Redundant or missing type information** - Do not repeat obvious types from
+    annotations, but do add type detail when the signature does not make it clear
 2. **Vague descriptions** - Be specific about what parameters do and what's returned
-3. **No examples** - Always include at least one practical example
-4. **Imperative vs declarative** - Use imperative mood ("Calculate sum") not declarative ("Calculates sum")
-5. **Incomplete raised exceptions** - Document all exceptions that may be raised
+3. **Forcing examples everywhere** - Add examples when they clarify usage, not by default
+4. **Mixed summary style** - Use descriptive or imperative summaries consistently within a file
+5. **Incomplete raised exceptions** - Document interface-relevant exceptions, not API misuse cases
 6. **Complex returns without structure** - For dicts/complex types, describe the structure
 7. **Examples that don't work** - Test your examples before including them
 
+The bundled index and audit scripts are intentionally conservative helpers.
+Use the prompt's scope rules to filter out trivial or out-of-scope callables
+before treating raw helper output as the final pass/fail signal. They are not
+a standalone completeness oracle for required module, class, or dataclass
+documentation. Decorator detection is tuned for canonical spellings such as
+`@property`, `@cached_property`, `@overload`, and `typing.overload`; if a
+project aliases those decorators to different local names, review them
+manually.
+
 ## Resources
 
-For more detailed examples and edge cases, see:
+For more detailed examples and edge cases, see these bundled resources:
+
+Bundled scripts are authoritative for this skill. Use similarly named
+workspace tools only as a fallback when the bundled copy is unavailable in the
+current checkout.
 
 - [references/examples.md](references/examples.md) - Comprehensive collection of real-world docstring examples
+- [references/python-docstrings-google.prompt.md](references/python-docstrings-google.prompt.md) - Copilot prompt for Google-style docstrings, pytest fixtures/tests, property and overload handling, and sync-audit workflows
+- [scripts/python-docstring-indexer.py](scripts/python-docstring-indexer.py) - Authoritative callable inventory for modules, classes, functions, fixtures, tests, and nested definitions
+- [scripts/python-docstring-mismatch-finder.py](scripts/python-docstring-mismatch-finder.py) - Authoritative raw mismatch checker for Args and Returns/Yields drift in Google-style docstrings; apply prompt-scope filtering before treating results as final
+- [scripts/python-docstring-sync-audit.py](scripts/python-docstring-sync-audit.py) - Authoritative raw structured sync audit for functions, methods, fixtures, tests, and nested callables; apply prompt-scope filtering before treating results as final
