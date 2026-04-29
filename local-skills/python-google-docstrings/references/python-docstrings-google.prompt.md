@@ -50,13 +50,13 @@ def get_user_info(user_id: int) -> dict:
     """
 ```
 # Process
-Use the bundled helper scripts under `.github/skills/python-google-docstrings/scripts/`
+Use the bundled skill helper scripts under `scripts/`
 as the authoritative source for this prompt. Use `${workspaceFolder}/tools/...`
 only as a fallback when the bundled scripts are unavailable in the current
 checkout.
 
 1) Preflight AST Discovery (must do before editing)
-- Parse `${input:pythonFile}` with `.github/skills/python-google-docstrings/scripts/python-docstring-indexer.py` if present, `${workspaceFolder}/tools/python_docstring_index.py` only when the bundled script is unavailable, or Python AST ( #tool:pylance-mcp-server/pylanceRunCodeSnippet if present) to enumerate:
+- Parse `${input:pythonFile}` with `scripts/python-docstring-indexer.py` if present, `${workspaceFolder}/tools/python-docstring-indexer.py` only when the bundled script is unavailable, or Python AST ( #tool:pylance-mcp-server/pylanceRunCodeSnippet if present) to enumerate:
   - Module (the file itself)
   - All classes and nested classes
   - All methods and nested methods
@@ -121,7 +121,7 @@ docstring_index:
       required_docstring: false
       reason: short test name and body already explain the scenario
 ```
-Use `.github/skills/python-google-docstrings/scripts/python-docstring-indexer.py` when it is available. `${workspaceFolder}/tools/python_docstring_index.py` is an acceptable fallback only when the bundled script is unavailable; otherwise use Python AST ( #tool:pylance-mcp-server/pylanceRunCodeSnippet if present) to perform this analysis.
+Use `scripts/python-docstring-indexer.py` when it is available. `${workspaceFolder}/tools/python-docstring-indexer.py` is an acceptable fallback only when the bundled script is unavailable; otherwise use Python AST ( #tool:pylance-mcp-server/pylanceRunCodeSnippet if present) to perform this analysis.
 
 
 2) Chunking Rule (for large files)
@@ -256,7 +256,7 @@ details entries format:
   type: <str>                    # args, returns, raises
   issue: <str>                   # brief description of the issue
 ```
-Use the bundled script `.github/skills/python-google-docstrings/scripts/python-docstring-sync-audit.py` to generate the initial docstring_sync_audit details. That bundled script is authoritative for this skill. `${workspaceFolder}/tools/python_docstring_sync_audit.py` is an acceptable fallback only when the bundled script is unavailable in the current checkout. Then report only the findings that remain in scope under this prompt.
+Use the bundled script `scripts/python-docstring-sync-audit.py` to generate the initial docstring_sync_audit details. That bundled script is authoritative for this skill. `${workspaceFolder}/tools/python-docstring-sync-audit.py` is an acceptable fallback only when the bundled script is unavailable in the current checkout. Then report only the findings that remain in scope under this prompt.
 
 - Success criteria:
   - remaining_required_without_docstring == 0
